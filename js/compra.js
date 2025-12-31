@@ -231,25 +231,46 @@ async function inicializarSistemaCompra() {
 /* ============================================================ */
 
 /**
- * Inicia timer para actualizar boletos cada 30 segundos
+ * Inicia timer para actualizar boletos cada 15 segundos
  * Detecta cuándo órdenes han sido canceladas por expiración
  * y libera los boletos en el grid
+ * 
+ * OPTIMIZACIÓN: Solo recarga /boletos si /stats muestra cambio de disponibles
  */
 function iniciarActualizacionPeriodicaBoletos() {
-    // Recargar boletos cada 30 segundos (agresivo pero necesario para detectar cancelaciones)
+    let ultimosDisponibles = window.rifaplusConfig?.estado?.boletosDisponibles || 0;
+    
+    // Verificar RÁPIDAMENTE cada 15 segundos llamando a /stats (ultra rápido)
     setInterval(async () => {
         try {
-            console.log(`🔄 [PeriodicUpdate] Recargate completo de boletos...`);
-            
-            // Simplemente llamar a cargarBoletosPublicos() que ya hace todo lo necesario
-            await cargarBoletosPublicos();
-            
-        } catch (error) {
-            console.error(`❌ [PeriodicUpdate] Error:`, error.message);
-        }
-    }, 30000); // Cada 30 segundos
+            let endpoint = (window.rifaplusConfig?.backend?.apiBase) ? window.rifaplusConfig.backend.apiBase : 'http://localhost:3000';
+            endpoint = String(endpoint).replace(/\/+$/, '');
 
-    console.log(`✅ [PeriodicUpdate] Sistema de actualización periódica iniciado (cada 30s)`);
+            // Llamada rápida a /stats solo para chequear disponibles
+            const statsResponse = await fetch(`${endpoint}/api/public/boletos/stats?t=${Date.now()}`, {
+                signal: AbortSignal.timeout(3000),
+                cache: 'no-store'
+            });
+
+            if (!statsResponse.ok) return;
+
+            const statsData = await statsResponse.json();
+            const disponiblesNuevo = statsData.data?.disponibles || 0;
+
+            // Si cambió el número de disponibles, recargar TODO
+            if (disponiblesNuevo !== ultimosDisponibles) {
+                console.log(`🔄 [PeriodicUpdate] Cambio detectado: ${ultimosDisponibles} → ${disponiblesNuevo} disponibles`);
+                ultimosDisponibles = disponiblesNuevo;
+
+                // Recargar datos completos
+                await cargarBoletosPublicos();
+            }
+        } catch (error) {
+            console.debug(`[PeriodicUpdate] Check rápido failed:`, error.message);
+        }
+    }, 15000); // Cada 15 segundos chequear /stats (muy rápido)
+
+    console.log(`✅ [PeriodicUpdate] Sistema de actualización periódica iniciado (verifica cada 15s)`);
 }
 
 /* ============================================================ */
