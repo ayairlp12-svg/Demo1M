@@ -258,8 +258,9 @@ function iniciarActualizacionPeriodicaBoletos() {
                     let endpoint = (window.rifaplusConfig?.backend?.apiBase) ? window.rifaplusConfig.backend.apiBase : 'http://localhost:3000';
                     endpoint = String(endpoint).replace(/\/+$/, '');
 
-                    const response = await fetch(`${endpoint}/api/public/boletos`, {
-                        priority: 'low'
+                    const response = await fetch(`${endpoint}/api/public/boletos?t=${Date.now()}`, {
+                        priority: 'low',
+                        cache: 'no-store' // ⭐ Forzar sin caché
                     });
 
                     if (!response.ok) {
@@ -268,7 +269,10 @@ function iniciarActualizacionPeriodicaBoletos() {
                     }
 
                     const json = await response.json();
-                    if (!json.success || !json.data) return;
+                    if (!json.success || !json.data) {
+                        console.warn(`⚠️  [Actualización] Respuesta inválida`, json);
+                        return;
+                    }
 
                     // ✅ CRITICAL: Solo actualizar si hay datos nuevos
                     let sold = Array.isArray(json.data.sold) ? json.data.sold : [];
@@ -278,15 +282,37 @@ function iniciarActualizacionPeriodicaBoletos() {
                     const soldActual = window.rifaplusSoldNumbers || [];
                     const reservadoActual = window.rifaplusReservedNumbers || [];
                     
-                    const cambioEnVendidos = sold.length !== soldActual.length;
-                    const cambioEnReservados = reserved.length !== reservadoActual.length;
+                    console.debug(`[Actualización] Datos recibidos: ${sold.length} vendidos, ${reserved.length} apartados`);
+                    console.debug(`[Actualización] Datos actuales: ${soldActual.length} vendidos, ${reservadoActual.length} apartados`);
 
-                    if (cambioEnVendidos || cambioEnReservados) {
-                        console.log(`📊 [Actualización] Cambios detectados:`);
+                    // ⭐ COMPARAR CONTENIDO: No solo longitud, sino si realmente hay diferencias
+                    const soldSet = new Set(sold);
+                    const reservedSet = new Set(reserved);
+                    const soldActualSet = new Set(soldActual);
+                    const reservadoActualSet = new Set(reservadoActual);
+
+                    // Buscar diferencias
+                    const boletosLiberados = [];
+                    for (const num of soldActualSet) {
+                        if (!soldSet.has(num) && !reservedSet.has(num)) {
+                            boletosLiberados.push(num); // Estaba vendido, ahora no
+                        }
+                    }
+                    for (const num of reservadoActualSet) {
+                        if (!soldSet.has(num) && !reservedSet.has(num)) {
+                            boletosLiberados.push(num); // Estaba apartado, ahora no
+                        }
+                    }
+
+                    if (boletosLiberados.length > 0 || sold.length !== soldActual.length || reserved.length !== reservadoActual.length) {
+                        console.log(`📊 [Actualización] CAMBIOS DETECTADOS:`);
                         console.log(`   - Vendidos: ${soldActual.length} → ${sold.length}`);
                         console.log(`   - Reservados: ${reservadoActual.length} → ${reserved.length}`);
+                        if (boletosLiberados.length > 0) {
+                            console.log(`   - Boletos liberados: ${boletosLiberados.join(', ').substring(0, 100)}...`);
+                        }
 
-                        // Actualizar arrays en memoria
+                        // ⭐ FORZAR ACTUALIZACIÓN: Siempre actualizar si hay cambios
                         window.rifaplusSoldNumbers = sold;
                         window.rifaplusReservedNumbers = reserved;
 
@@ -298,16 +324,16 @@ function iniciarActualizacionPeriodicaBoletos() {
                             window.rifaplusConfig.estado.boletosDisponibles = total - sold.length - reserved.length;
                         }
 
+                        console.log(`🎨 [Actualización] Re-renderizando grid...`);
                         // ♻️ ACTUALIZAR GRID: Re-renderizar colores sin recargar página
                         actualizarEstadoBoletosVisibles();
 
                         // ✅ Log de cambios
-                        const liberados = (soldActual.length + reservadoActual.length) - (sold.length + reserved.length);
-                        if (liberados > 0) {
-                            console.log(`✅ [Actualización] ${liberados} boletos fueron liberados (órdenes canceladas)`);
+                        if (boletosLiberados.length > 0) {
+                            console.log(`✅ [Actualización] ${boletosLiberados.length} boletos fueron liberados (órdenes canceladas)`);
                         }
                     } else {
-                        console.log(`[Actualización] Sin cambios en disponibilidad`);
+                        console.debug(`[Actualización] Sin cambios en disponibilidad`);
                     }
                 } catch (error) {
                     console.error(`❌ [Actualización] Error:`, error.message);
@@ -575,10 +601,15 @@ function actualizarEstadoBoletosVisibles() {
     
     idleCallback(() => {
         const grid = document.getElementById('numerosGrid');
-        if (!grid) return;
+        if (!grid) {
+            console.warn('⚠️  Grid no encontrado para actualizar');
+            return;
+        }
         
         const soldSet = new Set((window.rifaplusSoldNumbers && Array.isArray(window.rifaplusSoldNumbers)) ? window.rifaplusSoldNumbers : []);
         const reservedSet = new Set((window.rifaplusReservedNumbers && Array.isArray(window.rifaplusReservedNumbers)) ? window.rifaplusReservedNumbers : []);
+        
+        console.debug(`🎨 [actualizarEstadoBoletosVisibles] Actualizando colores: ${soldSet.size} vendidos, ${reservedSet.size} apartados`);
         
         // Detectar Safari (iOS, macOS, iPad OS) - IntersectionObserver tiene bug en Safari
         const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome|Edge|Firefox/.test(navigator.userAgent);
@@ -589,6 +620,8 @@ function actualizarEstadoBoletosVisibles() {
             console.debug('🍎 Safari detectado: actualizando todos los boletos directamente');
             // Actualizar todos los botones sin IntersectionObserver
             const botones = grid.querySelectorAll('button[data-numero]');
+            let actualizados = 0;
+            
             botones.forEach(btn => {
                 const numero = parseInt(btn.getAttribute('data-numero'), 10);
                 
@@ -602,16 +635,23 @@ function actualizarEstadoBoletosVisibles() {
                     btn.classList.add('sold');
                     btn.disabled = true;
                     btn.title = 'Vendido';
+                    actualizados++;
                 } else if (reservedSet.has(numero)) {
                     btn.classList.add('reserved');
                     btn.disabled = true;
                     btn.title = 'Apartado';
+                    actualizados++;
                 }
             });
+            
+            console.debug(`✅ Safari: ${actualizados}/${botones.length} boletos actualizados`);
             return; // No continuar con IntersectionObserver
         }
         
         // 🚀 OPTIMIZACIÓN: Usar IntersectionObserver para solo actualizar lo visible
+        const botones = grid.querySelectorAll('button[data-numero]');
+        console.debug(`🔍 Observando ${botones.length} botones con IntersectionObserver`);
+        
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 const btn = entry.target;
@@ -642,8 +682,8 @@ function actualizarEstadoBoletosVisibles() {
         });
         
         // Observar todos los botones
-        const botones = grid.querySelectorAll('button[data-numero]');
         botones.forEach(btn => observer.observe(btn));
+        console.debug(`✅ Observadores de IntersectionObserver registrados`);
     }); // Usar solo el callback, sin opciones (Safari compatible)
 }
 
