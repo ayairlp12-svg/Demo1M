@@ -358,12 +358,12 @@ Object.assign(window.rifaplusConfig, {
         
         // Auto-detectar API base
         get apiBase() {
-            // Usa Render en producción, localhost en desarrollo
-            if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                return 'https://rifas-web-1.onrender.com';
+            // En localhost/127.0.0.1 → usar local
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                return `http://127.0.0.1:${this.puerto}`;
             }
-            // Usa 127.0.0.1 en lugar de localhost para evitar problemas de CSP
-            return `http://127.0.0.1:${this.puerto}`;
+            // En producción (Netlify) → usar Render
+            return 'https://rifas-web-1.onrender.com';
         },
         endpoints: {
             ordenes: '/api/ordenes',
