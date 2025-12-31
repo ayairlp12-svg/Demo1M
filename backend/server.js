@@ -2090,8 +2090,8 @@ app.post('/api/public/ordenes-cliente/:numero_orden/comprobante', async (req, re
                 updated_at: timestampUTC
             });
 
-        // Invalidar caché de boletos para que se actualice la lista de "reserved"
-        invalidarBoletosCaches();
+        // Los caché de boletos se actualizarán automáticamente en el siguiente GET /api/public/boletos
+        // No hay caché a invalidar aquí
 
         log('info', 'Comprobante subido exitosamente', {
             numero_orden,
