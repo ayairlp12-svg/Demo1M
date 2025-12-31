@@ -1942,8 +1942,10 @@ function controlarEstadoBotonesLoQuiero() {
 /**
  * 🚀 OPTIMIZACIÓN MÓVIL: Procesar boletos en Web Worker
  * No bloquea el main thread, permite que la UI sea responsive
+ * Con fallback a main thread si Web Worker falla o no responde (ej: iPhone)
  */
 let boletosWorker = null;
+let workerTimeoutId = null;
 
 function procesarBoletosEnBackground(sold, reserved) {
     // Inicializar worker solo una vez
@@ -1952,6 +1954,9 @@ function procesarBoletosEnBackground(sold, reserved) {
             boletosWorker = new Worker('js/boletos-processor.worker.js');
             
             boletosWorker.onmessage = function(event) {
+                // Limpiar timeout si el worker responde
+                if (workerTimeoutId) clearTimeout(workerTimeoutId);
+                
                 if (event.data.success) {
                     // Worker procesó los datos, guardar en ventana global
                     window.rifaplusSoldNumbers = event.data.soldSet;
@@ -1963,21 +1968,26 @@ function procesarBoletosEnBackground(sold, reserved) {
                 } else {
                     console.warn('⚠️  Error en Web Worker:', event.data.error);
                     // Fallback: procesar en main thread (lento pero funciona)
-                    window.rifaplusSoldNumbers = sold.map(Number);
-                    window.rifaplusReservedNumbers = reserved.map(Number);
+                    procesarEnMainThread(sold, reserved);
                 }
             };
         } catch (error) {
             console.warn('⚠️  Web Workers no disponibles, procesando en main thread (lento)');
             // Fallback para navegadores sin Web Workers
-            window.rifaplusSoldNumbers = sold.map(Number);
-            window.rifaplusReservedNumbers = reserved.map(Number);
+            procesarEnMainThread(sold, reserved);
         }
     }
     
     // Enviar datos al worker
     if (boletosWorker) {
         try {
+            // ⏰ TIMEOUT: Si el worker no responde en 3 segundos, hacer fallback
+            workerTimeoutId = setTimeout(() => {
+                console.warn('⚠️  Web Worker timeout (3s) - usando main thread como fallback');
+                procesarEnMainThread(sold, reserved);
+                boletosWorker = null; // Descartar este worker
+            }, 3000);
+            
             boletosWorker.postMessage({
                 action: 'process',
                 sold: sold,
@@ -1986,13 +1996,30 @@ function procesarBoletosEnBackground(sold, reserved) {
         } catch (error) {
             console.warn('⚠️  Error enviando datos a worker:', error.message);
             // Fallback inmediato
-            window.rifaplusSoldNumbers = sold.map(Number);
-            window.rifaplusReservedNumbers = reserved.map(Number);
+            if (workerTimeoutId) clearTimeout(workerTimeoutId);
+            procesarEnMainThread(sold, reserved);
         }
     } else {
         // Si Worker no disponible, procesar aqui (pero lentamente)
+        procesarEnMainThread(sold, reserved);
+    }
+}
+
+/**
+ * Procesar números en main thread (más lento pero funciona en todos lados)
+ * Se usa como fallback cuando Web Worker falla o no está disponible
+ */
+function procesarEnMainThread(sold, reserved) {
+    try {
+        console.debug('🔄 Procesando en main thread (fallback)...');
         window.rifaplusSoldNumbers = sold.map(Number);
         window.rifaplusReservedNumbers = reserved.map(Number);
+        console.debug(`✅ Main thread: Procesados ${sold.length + reserved.length} boletos`);
+    } catch (error) {
+        console.error('❌ Error procesando en main thread:', error);
+        // Último fallback: arrays vacíos (mejor que nada)
+        window.rifaplusSoldNumbers = [];
+        window.rifaplusReservedNumbers = [];
     }
 }
 
