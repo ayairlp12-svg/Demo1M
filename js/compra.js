@@ -273,6 +273,16 @@ async function cargarBoletosPublicos() {
                     // 🚀 CRÍTICO: Marcar como cargado una vez que /stats responde
                     // Esto permite que el botón de generar se habilite aunque Web Worker siga procesando
                     window.rifaplusBoletosLoaded = true;
+                    
+                    // 🔧 IMPORTANTE: Si los arrays aún no están poblados (Web Worker lento/fallido),
+                    // crear arrays vacíos para que obtenerNumerosDisponibles() funcione correctamente
+                    if (!window.rifaplusSoldNumbers) {
+                        window.rifaplusSoldNumbers = [];
+                    }
+                    if (!window.rifaplusReservedNumbers) {
+                        window.rifaplusReservedNumbers = [];
+                    }
+                    
                     if (typeof actualizarEstadoBotonGenerar === 'function') {
                         actualizarEstadoBotonGenerar();
                     }
@@ -766,6 +776,21 @@ function obtenerNumerosDisponibles() {
     // Obtener total de boletos DIRECTAMENTE de config.js
     const totalTickets = window.rifaplusConfig.rifa.totalBoletos;
     
+    // Intentar obtener arrays de boletos
+    const sold = (window.rifaplusSoldNumbers && Array.isArray(window.rifaplusSoldNumbers)) ? window.rifaplusSoldNumbers : [];
+    const reserved = (window.rifaplusReservedNumbers && Array.isArray(window.rifaplusReservedNumbers)) ? window.rifaplusReservedNumbers : [];
+    
+    // 🚀 OPTIMIZACIÓN: Si arrays están vacíos pero config tiene conteos,
+    // devolver un estimado. Esto permite que el botón funcione aunque Web Worker falle
+    if (sold.length === 0 && reserved.length === 0 && window.rifaplusConfig && window.rifaplusConfig.estado) {
+        const disponibles = window.rifaplusConfig.estado.boletosDisponibles;
+        if (disponibles > 0) {
+            console.debug(`📊 Usando conteo del endpoint: ${disponibles} disponibles`);
+            // Devolver un array ficticio con ese tamaño para que disponibles.length funcione
+            return new Array(disponibles);
+        }
+    }
+    
     // Crear un conjunto de todos los números posibles
     const todosLosNumeros = new Set();
     for (let i = 1; i <= totalTickets; i++) {
@@ -773,8 +798,6 @@ function obtenerNumerosDisponibles() {
     }
     
     // Eliminar números que están vendidos/apartados según datos reales del servidor
-    const sold = (window.rifaplusSoldNumbers && Array.isArray(window.rifaplusSoldNumbers)) ? window.rifaplusSoldNumbers : [];
-    const reserved = (window.rifaplusReservedNumbers && Array.isArray(window.rifaplusReservedNumbers)) ? window.rifaplusReservedNumbers : [];
     // Normalizar y eliminar (ignorar valores no numéricos)
     sold.forEach(n => {
         const nn = Number(n);
