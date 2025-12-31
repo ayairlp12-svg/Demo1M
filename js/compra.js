@@ -291,24 +291,10 @@ async function cargarBoletosPublicos() {
         let sold = Array.isArray(json.data?.sold) ? json.data.sold.map(Number) : [];
         let reserved = Array.isArray(json.data?.reserved) ? json.data.reserved.map(Number) : [];
 
-        // ⭐ FAILSAFE: Si both son vacíos pero tenemos datos previos, mantener los previos
-        // (esto previene que la grilla se limpie accidentalmente)
-        const tienePrevios = window.rifaplusSoldNumbers && window.rifaplusReservedNumbers;
-        const ambosSonVacios = sold.length === 0 && reserved.length === 0;
-        
-        if (ambosSonVacios && tienePrevios) {
-            console.warn('⚠️ API devolvió arrays vacíos pero tenemos datos previos - manteniendo datos anteriores');
-            // No actualizar, mantener datos anteriores
-            // Pero si es la primera carga (no hay datos previos), usar los arrays vacíos
-            if (!window.rifaplusBoletosLoaded) {
-                window.rifaplusSoldNumbers = sold;
-                window.rifaplusReservedNumbers = reserved;
-            }
-        } else {
-            // Actualizar con nuevos datos (incluso si uno está vacío)
-            window.rifaplusSoldNumbers = sold;
-            window.rifaplusReservedNumbers = reserved;
-        }
+        // ⭐ SIEMPRE usar datos del backend (sin failsafe que mantiene datos antiguos)
+        // Esto asegura que después de liberar boletos, se muestren correctamente
+        window.rifaplusSoldNumbers = sold;
+        window.rifaplusReservedNumbers = reserved;
         
         if (json && json.success) {
             // Indicar que los datos de disponibilidad ya se cargaron
