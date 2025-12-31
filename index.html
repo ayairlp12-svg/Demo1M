@@ -1147,7 +1147,7 @@
             if (!seccion || !contenedor) return;
 
             try {
-                const res = await fetch('http://localhost:5001/api/ganadores?limit=500');
+                const res = await fetch('https://rifas-web-1.onrender.com/api/ganadores?limit=500');
                 if (!res.ok) throw new Error('no_server');
                 const payload = await res.json();
                 const rows = payload && payload.data ? payload.data : [];
