@@ -580,7 +580,16 @@ async function selectRifa(rifaId) {
     
     // Actualizar info panel
     // ⚠️ IMPORTANTE: El nombre SIEMPRE viene de config.js, no del servidor
-    document.getElementById('rifaNombre').textContent = config.rifa?.titulo || 'Sin nombre';
+    // Prueba múltiples fuentes para obtener el nombre:
+    const rifaNombre = config.rifa?.titulo || 
+                       window.rifaplusConfig?.rifa?.titulo || 
+                       rifa?.name || 
+                       'Sorteo Actual';
+    
+    console.log('🎡 Nombre del sorteo:', rifaNombre);
+    console.log('📋 Config disponible:', config);
+    
+    document.getElementById('rifaNombre').textContent = rifaNombre;
     document.getElementById('rifaTotal').textContent = totalBoletos;
     document.getElementById('rifaVendidos').textContent = vendidos;
     document.getElementById('rifaSorteados').textContent = sorteados;
