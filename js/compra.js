@@ -279,7 +279,14 @@ async function cargarBoletosPublicos() {
                 }
             }
         } catch (error) {
-            console.debug('⚠️  Error cargando stats (no crítico):', error.message);
+            console.error('❌ Error cargando stats (mostrar en UI):', error.message, error.stack);
+            // Mostrar error al usuario
+            const availabilityNote = document.getElementById('availabilityNote');
+            if (availabilityNote) {
+                availabilityNote.textContent = '❌ Error cargando disponibilidad: ' + (error.message || 'desconocido');
+                availabilityNote.style.display = 'inline-block';
+                availabilityNote.style.color = 'red';
+            }
         }
         
         // 🔄 STAGE 2: BACKGROUND - Cargar datos completos SIN BLOQUEAR
