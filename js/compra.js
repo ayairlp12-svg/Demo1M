@@ -447,7 +447,7 @@ async function cargarDatosCompletosEnBackground(endpoint) {
 /**
  * ⭐ OPTIMIZACIÓN: Actualizar SOLO los boletos visibles sin limpiar el grid
  * Esto evita que se reinicie el scroll cuando se actualiza el estado de boletos
- * OPTIMIZADO: Solo actualiza botones visibles en pantalla usando IntersectionObserver
+ * OPTIMIZADO: IntersectionObserver con fallback para Safari iOS
  */
 function actualizarEstadoBoletosVisibles() {
     requestIdleCallback(() => {
@@ -456,6 +456,37 @@ function actualizarEstadoBoletosVisibles() {
         
         const soldSet = new Set((window.rifaplusSoldNumbers && Array.isArray(window.rifaplusSoldNumbers)) ? window.rifaplusSoldNumbers : []);
         const reservedSet = new Set((window.rifaplusReservedNumbers && Array.isArray(window.rifaplusReservedNumbers)) ? window.rifaplusReservedNumbers : []);
+        
+        // Detectar si es Safari iOS
+        const isSafariIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+        
+        // 🚀 OPTIMIZACIÓN: En Safari iOS, actualizar TODOS los botones directamente
+        // En otros navegadores, usar IntersectionObserver (más eficiente)
+        if (isSafariIOS) {
+            console.debug('📱 Safari iOS detectado: actualizando todos los boletos directamente');
+            // Actualizar todos los botones sin IntersectionObserver
+            const botones = grid.querySelectorAll('button[data-numero]');
+            botones.forEach(btn => {
+                const numero = parseInt(btn.getAttribute('data-numero'), 10);
+                
+                // Remover clases antiguas
+                btn.classList.remove('sold', 'reserved');
+                btn.disabled = false;
+                btn.title = '';
+                
+                // Aplicar nuevas clases según estado actual
+                if (soldSet.has(numero)) {
+                    btn.classList.add('sold');
+                    btn.disabled = true;
+                    btn.title = 'Vendido';
+                } else if (reservedSet.has(numero)) {
+                    btn.classList.add('reserved');
+                    btn.disabled = true;
+                    btn.title = 'Apartado';
+                }
+            });
+            return; // No continuar con IntersectionObserver
+        }
         
         // 🚀 OPTIMIZACIÓN: Usar IntersectionObserver para solo actualizar lo visible
         const observer = new IntersectionObserver((entries) => {
