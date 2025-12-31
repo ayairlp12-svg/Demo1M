@@ -590,7 +590,8 @@ async function guardarOrden() {
         // ⭐ VALIDACIÓN CRÍTICA: Verificar disponibilidad en TIEMPO REAL (sin caché)
         console.log('🔍 Verificando disponibilidad de boletos en tiempo real...');
         try {
-            const checkResponse = await fetch('http://127.0.0.1:5001/api/public/boletos', {
+            const apiBase = window.rifaplusConfig?.backend?.apiBase || 'https://rifas-web-1.onrender.com';
+            const checkResponse = await fetch(`${apiBase}/api/public/boletos`, {
                 method: 'GET',
                 headers: { 'Accept': 'application/json' },
                 mode: 'cors',
@@ -686,7 +687,8 @@ async function guardarOrden() {
         }
 
         // ENVÍO AL SERVIDOR CON TIMEOUT Y REINTENTOS
-        const apiUrl = 'http://127.0.0.1:5001/api/ordenes';
+        const apiBase = window.rifaplusConfig?.backend?.apiBase || 'https://rifas-web-1.onrender.com';
+        const apiUrl = `${apiBase}/api/ordenes`;
         const maxReintentos = 3;
         let ultimoError = null;
 
