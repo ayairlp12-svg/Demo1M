@@ -611,9 +611,21 @@ function actualizarEstadoBotonGenerar() {
         return;
     }
     const loaded = !!window.rifaplusBoletosLoaded;
-    // También comprobar que la cantidad solicitada esté disponible
-    const disponibles = obtenerNumerosDisponibles();
-    const enough = Array.isArray(disponibles) ? (disponibles.length >= val) : false;
+    
+    // 🚀 OPTIMIZACIÓN: Usar conteo del endpoint /stats en lugar de recalcular
+    // Esto evita oscilaciones cuando Web Worker está procesando
+    let disponiblesCount = 0;
+    
+    if (window.rifaplusConfig && window.rifaplusConfig.estado && window.rifaplusConfig.estado.boletosDisponibles !== undefined) {
+        // Usar conteo confiable del endpoint
+        disponiblesCount = window.rifaplusConfig.estado.boletosDisponibles;
+    } else {
+        // Fallback: recalcular (lento pero funciona)
+        const disponibles = obtenerNumerosDisponibles();
+        disponiblesCount = Array.isArray(disponibles) ? disponibles.length : 0;
+    }
+    
+    const enough = disponiblesCount >= val;
     btnGenerar.disabled = !loaded || !enough;
 }
 
