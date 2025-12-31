@@ -2489,32 +2489,12 @@ app.get('/api/public/boletos', async (req, res) => {
         const vendidos = parseInt(result.vendidos) || 0;
         const reservados = parseInt(result.reservados) || 0;
 
-        // Traer las listas reales OPTIMIZADAS: comprimir a rangos
+        // Traer las listas reales OPTIMIZADAS
         const boletosNoDisponibles = await db('boletos_estado')
             .whereIn('estado', ['vendido', 'reservado'])
             .select('numero', 'estado')
             .timeout(20000)
             .orderBy('numero');
-
-        // Convertir arrays a rangos comprimidos (ej: "1-5,10-15" en lugar de [1,2,3,4,5,10,11,12,13,14,15])
-        const comprimirRangos = (numeros) => {
-            if (!numeros.length) return '';
-            const rangos = [];
-            let inicio = numeros[0];
-            let fin = numeros[0];
-            
-            for (let i = 1; i < numeros.length; i++) {
-                if (numeros[i] === fin + 1) {
-                    fin = numeros[i];
-                } else {
-                    rangos.push(inicio === fin ? String(inicio) : `${inicio}-${fin}`);
-                    inicio = numeros[i];
-                    fin = numeros[i];
-                }
-            }
-            rangos.push(inicio === fin ? String(inicio) : `${inicio}-${fin}`);
-            return rangos.join(',');
-        };
 
         const sold = boletosNoDisponibles
             .filter(b => b.estado === 'vendido')
@@ -2524,21 +2504,14 @@ app.get('/api/public/boletos', async (req, res) => {
             .filter(b => b.estado === 'reservado')
             .map(b => Number(b.numero));
 
-        // Comprimir rangos
-        const soldComprimido = comprimirRangos(sold);
-        const reservedComprimido = comprimirRangos(reserved);
-
         const disponibles = 60000 - vendidos - reservados;
         const queryTime = Date.now() - startTime;
         
         const payload = {
             success: true,
             data: {
-                sold: soldComprimido,      // Comprimido: "1-100,150-200"
-                reserved: reservedComprimido,  // Comprimido
-                // Mantener arrays para compatibilidad si es necesario
-                sold_array: sold,
-                reserved_array: reserved
+                sold,
+                reserved
             },
             stats: {
                 vendidos: vendidos,
