@@ -579,8 +579,8 @@ async function selectRifa(rifaId) {
     const disponibles = totalBoletos - vendidos; // Disponibles = total - vendidos
     
     // Actualizar info panel
-    
-    document.getElementById('rifaNombre').textContent = rifa.name || config.rifa?.titulo || '-';
+    // ⚠️ IMPORTANTE: El nombre SIEMPRE viene de config.js, no del servidor
+    document.getElementById('rifaNombre').textContent = config.rifa?.titulo || 'Sin nombre';
     document.getElementById('rifaTotal').textContent = totalBoletos;
     document.getElementById('rifaVendidos').textContent = vendidos;
     document.getElementById('rifaSorteados').textContent = sorteados;
