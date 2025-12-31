@@ -4096,6 +4096,91 @@ app.post('/api/admin/cleanup-boletos', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/admin/limpiar-ordenes-canceladas
+ * Corrije órdenes canceladas cuyos boletos NO fueron liberados
+ * Busca todas las órdenes con estado='cancelada' y libera sus boletos
+ */
+app.post('/api/admin/limpiar-ordenes-canceladas', verificarToken, async (req, res) => {
+    try {
+        console.log('🧹 [CLEANUP] Iniciando limpieza de órdenes canceladas...');
+        
+        // PASO 1: Encontrar todas las órdenes canceladas
+        const ordenesCanceladas = await db('ordenes')
+            .where('estado', 'cancelada')
+            .select('id', 'numero_orden', 'boletos');
+
+        console.log(`[CLEANUP] Encontradas ${ordenesCanceladas.length} órdenes canceladas`);
+
+        let boletosLiberadosTotal = 0;
+        let ordenesProcessadas = 0;
+
+        // PASO 2: Procesar cada orden cancelada
+        for (const orden of ordenesCanceladas) {
+            try {
+                // Parsear boletos
+                let boletos = [];
+                if (Array.isArray(orden.boletos)) {
+                    boletos = orden.boletos.map(n => {
+                        const num = parseInt(n, 10);
+                        return isNaN(num) ? null : num;
+                    }).filter(n => n !== null);
+                } else if (typeof orden.boletos === 'string') {
+                    try {
+                        boletos = JSON.parse(orden.boletos || '[]');
+                        if (!Array.isArray(boletos)) boletos = [];
+                    } catch (e) {
+                        if (orden.boletos.length > 0) {
+                            boletos = orden.boletos.split(',').map(n => {
+                                const num = parseInt(n.trim(), 10);
+                                return isNaN(num) ? null : num;
+                            }).filter(n => n !== null);
+                        }
+                    }
+                }
+
+                if (boletos.length === 0) continue;
+
+                // Liberar estos boletos en la BD
+                const actualizado = await db('boletos_estado')
+                    .whereIn('numero', boletos)
+                    .update({
+                        estado: 'disponible',
+                        numero_orden: null,
+                        reservado_en: null,
+                        vendido_en: null,
+                        updated_at: new Date()
+                    });
+
+                if (actualizado > 0) {
+                    console.log(`  ✓ ${orden.numero_orden}: ${actualizado} boletos liberados`);
+                    boletosLiberadosTotal += actualizado;
+                    ordenesProcessadas++;
+                }
+            } catch (error) {
+                console.error(`  ❌ Error procesando ${orden.numero_orden}:`, error.message);
+            }
+        }
+
+        console.log(`✅ [CLEANUP] Completado: ${ordenesProcessadas} órdenes, ${boletosLiberadosTotal} boletos liberados`);
+
+        return res.json({
+            success: true,
+            message: 'Limpieza completada',
+            ordenesProcesadas: ordenesProcessadas,
+            boletosLiberados: boletosLiberadosTotal
+        });
+
+    } catch (error) {
+        console.error('❌ [CLEANUP] Error:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: 'Error durante limpieza',
+            error: error.message
+        });
+    }
+});
+
 // Iniciar servidor
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
