@@ -457,13 +457,13 @@ function actualizarEstadoBoletosVisibles() {
         const soldSet = new Set((window.rifaplusSoldNumbers && Array.isArray(window.rifaplusSoldNumbers)) ? window.rifaplusSoldNumbers : []);
         const reservedSet = new Set((window.rifaplusReservedNumbers && Array.isArray(window.rifaplusReservedNumbers)) ? window.rifaplusReservedNumbers : []);
         
-        // Detectar si es Safari iOS
-        const isSafariIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+        // Detectar Safari (iOS, macOS, iPad OS) - IntersectionObserver tiene bug en Safari
+        const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome|Edge|Firefox/.test(navigator.userAgent);
         
-        // 🚀 OPTIMIZACIÓN: En Safari iOS, actualizar TODOS los botones directamente
+        // 🚀 OPTIMIZACIÓN: En Safari (cualquier plataforma), actualizar TODOS los botones directamente
         // En otros navegadores, usar IntersectionObserver (más eficiente)
-        if (isSafariIOS) {
-            console.debug('📱 Safari iOS detectado: actualizando todos los boletos directamente');
+        if (isSafari) {
+            console.debug('🍎 Safari detectado: actualizando todos los boletos directamente');
             // Actualizar todos los botones sin IntersectionObserver
             const botones = grid.querySelectorAll('button[data-numero]');
             botones.forEach(btn => {
