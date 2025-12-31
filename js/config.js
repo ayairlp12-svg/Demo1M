@@ -180,7 +180,7 @@ Object.assign(window.rifaplusConfig, {
         // Tiempo que una orden permanece apartada sin comprobante de pago (en HORAS)
         // Después de este tiempo, los boletos se liberan automáticamente
         // ⚠️  CAMBIAR AQUÍ para modificar el tiempo de expiración (4, 12, 24, etc.)
-        tiempoApartadoHoras: 4,  // 4 horas por defecto
+        tiempoApartadoHoras: 0.5,  // 30 minutos (0.5 horas) - TEST
         
         // Mostrar advertencia al cliente X horas antes de expirar
         advertenciaExpirationHoras: 1,  // Avisar 1 hora antes de expirar
@@ -188,7 +188,7 @@ Object.assign(window.rifaplusConfig, {
         // Intervalo en que el backend verifica órdenes expiradas (en MINUTOS)
         // Más pequeño = verificación más frecuente pero más carga en BD
         // Recomendado: 5-10 minutos
-        intervaloLimpiezaMinutos: 5,  // Cada 5 minutos
+        intervaloLimpiezaMinutos: 1,  // Cada 1 minuto (TEST - verifica frecuentemente)
         
         // Máximo de boletos que pueden estar apartados sin pago
         // (por si necesitas un límite diferente al total)
