@@ -683,6 +683,16 @@ async function generarNumerosAleatoriosMejorado() {
     // Limpiar resultados anteriores
     numerosSuerte.innerHTML = '';
     
+    // ⚠️ CRÍTICO: Validar que tengamos datos de vendidos/apartados ANTES de generar
+    // Si están vacíos, es peligroso - podría elegir números ya vendidos/apartados
+    if (!Array.isArray(window.rifaplusSoldNumbers) || !Array.isArray(window.rifaplusReservedNumbers)) {
+        console.error('❌ CRÍTICO: Arrays de vendidos/apartados no inicializados');
+        rifaplusUtils.showFeedback('❌ Datos de boletos no disponibles. Recargando...', 'error');
+        await cargarBoletosPublicos();
+        // No continuar - esperar a que se recarguen
+        return;
+    }
+    
     // Asegurarnos de tener datos actualizados de vendidos/apartados
     const btnGenerar = document.getElementById('btnGenerarNumeros');
     const origText = btnGenerar && btnGenerar.dataset && btnGenerar.dataset.origText ? btnGenerar.dataset.origText : (btnGenerar ? btnGenerar.textContent : null);
@@ -692,7 +702,7 @@ async function generarNumerosAleatoriosMejorado() {
             btnGenerar.textContent = 'Generando…';
             btnGenerar.classList && btnGenerar.classList.add('loading');
         }
-        if (!Array.isArray(window.rifaplusSoldNumbers) || !Array.isArray(window.rifaplusReservedNumbers) || !window.rifaplusBoletosLoaded) {
+        if (!window.rifaplusBoletosLoaded) {
             await cargarBoletosPublicos();
         }
     } finally {
@@ -792,15 +802,11 @@ function obtenerNumerosDisponibles() {
     const sold = (window.rifaplusSoldNumbers && Array.isArray(window.rifaplusSoldNumbers)) ? window.rifaplusSoldNumbers : [];
     const reserved = (window.rifaplusReservedNumbers && Array.isArray(window.rifaplusReservedNumbers)) ? window.rifaplusReservedNumbers : [];
     
-    // 🚀 OPTIMIZACIÓN: Si arrays están vacíos pero config tiene conteos,
-    // devolver un estimado. Esto permite que el botón funcione aunque Web Worker falle
-    if (sold.length === 0 && reserved.length === 0 && window.rifaplusConfig && window.rifaplusConfig.estado) {
-        const disponibles = window.rifaplusConfig.estado.boletosDisponibles;
-        if (disponibles > 0) {
-            console.debug(`📊 Usando conteo del endpoint: ${disponibles} disponibles`);
-            // Devolver un array ficticio con ese tamaño para que disponibles.length funcione
-            return new Array(disponibles);
-        }
+    // ⚠️ CRÍTICO SEGURIDAD: Si arrays de vendidos/apartados están vacíos,
+    // NO devolver números - es peligroso, podrían ser números ya vendidos/apartados
+    if (sold.length === 0 && reserved.length === 0) {
+        console.warn('⚠️  Arrays de vendidos/apartados vacíos - no es seguro generar números');
+        return []; // Retornar vacío para forzar recarga
     }
     
     // Crear un conjunto de todos los números posibles
