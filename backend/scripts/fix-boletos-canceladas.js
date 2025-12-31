@@ -7,8 +7,11 @@
  * USO: node backend/scripts/fix-boletos-canceladas.js
  */
 
-const db = require('../db');
+// ✅ CRÍTICO: Cargar .env PRIMERO, antes de cualquier require
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
+const db = require('../db');
 
 async function sincronizarBoletoscanceladas() {
     console.log('\n╔════════════════════════════════════════════════════════╗');
