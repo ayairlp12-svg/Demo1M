@@ -23,12 +23,13 @@ async function sincronizarBoletoscanceladas() {
     let errores = [];
 
     try {
-        // 1. Buscar todas las órdenes CANCELADAS
+        // 1. Buscar todas las órdenes CANCELADAS **SIN COMPROBANTE**
         const ordenesCanceladas = await db('ordenes')
             .where('estado', 'cancelada')
+            .whereNull('comprobante_path')  // ⭐ SOLO sin comprobante
             .select('id', 'numero_orden', 'boletos', 'created_at');
 
-        console.log(`📋 Encontradas ${ordenesCanceladas.length} órdenes CANCELADAS\n`);
+        console.log(`📋 Encontradas ${ordenesCanceladas.length} órdenes CANCELADAS SIN COMPROBANTE\n`);
         totalOrdenesCanceladas = ordenesCanceladas.length;
 
         // 2. Para cada orden cancelada, liberar sus boletos
