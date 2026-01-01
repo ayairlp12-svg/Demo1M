@@ -17,7 +17,8 @@ export default async function handler(req, res) {
         }
 
         // Obtener datos del sorteo desde el backend
-        let rifaTitulo = 'RAM 700 2025 - Rifas el Trebol';
+        let clienteNombre = 'SORTEOS EL TREBOL';
+        let rifaTitulo = 'Sorteo';
         let rifaDescripcion = 'Participa en nuestro sorteo 100% transparente';
         
         try {
@@ -25,9 +26,10 @@ export default async function handler(req, res) {
             const response = await fetch(`${backendUrl}/api/public/sorteo-info`);
             if (response.ok) {
                 const data = await response.json();
+                clienteNombre = data.cliente || clienteNombre;
                 rifaTitulo = data.titulo || rifaTitulo;
                 rifaDescripcion = data.descripcion || rifaDescripcion;
-                console.log(`✅ Open Graph dinámico: ${rifaTitulo}`);
+                console.log(`✅ Open Graph dinámico: ${clienteNombre} - ${rifaTitulo}`);
             }
         } catch (fetchError) {
             console.warn('⚠️ No se pudo obtener datos del backend, usando valores por defecto');
@@ -42,20 +44,20 @@ export default async function handler(req, res) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SORTEOS YEPE - Gana ${rifaTitulo} | Rifas 100% Transparentes</title>
-    <meta name="description" content="Participa en SORTEOS YEPE. ${rifaDescripcion}. Sorteo 100% transparente en vivo.">
+    <title>${clienteNombre} - Gana ${rifaTitulo} | Rifas 100% Transparentes</title>
+    <meta name="description" content="Participa en ${clienteNombre}. ${rifaDescripcion}. Sorteo 100% transparente en vivo.">
     
     <!-- Open Graph Meta Tags -->
-    <meta property="og:title" content="SORTEOS YEPE - Gana ${rifaTitulo}" />
+    <meta property="og:title" content="${clienteNombre} - Gana ${rifaTitulo}" />
     <meta property="og:description" content="${rifaDescripcion}" />
     <meta property="og:image" content="${imagenUrl}" />
     <meta property="og:url" content="${urlBase}" />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="SORTEOS YEPE" />
+    <meta property="og:site_name" content="${clienteNombre}" />
     
     <!-- Twitter Card Meta Tags -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="SORTEOS YEPE - Gana ${rifaTitulo}" />
+    <meta name="twitter:title" content="${clienteNombre} - Gana ${rifaTitulo}" />
     <meta name="twitter:description" content="${rifaDescripcion}" />
     <meta name="twitter:image" content="${imagenUrl}" />
     

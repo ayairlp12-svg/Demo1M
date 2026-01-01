@@ -427,28 +427,31 @@ app.get('/api/public/sorteo-info', (req, res) => {
         const configContent = fs.readFileSync(configPath, 'utf8');
         
         // Extraer valores usando regex
+        const clienteNombreMatch = configContent.match(/nombre:\s*"([^"]+)"/);
         const rifaTituloMatch = configContent.match(/titulo:\s*"([^"]+)"/);
         const rifaDescripcionMatch = configContent.match(/descripcion:\s*"([^"]+)"/);
-        const clienteNombreMatch = configContent.match(/nombre:\s*"([^"]+)"/);
         
+        const clienteNombre = clienteNombreMatch ? clienteNombreMatch[1] : 'SORTEOS EL TREBOL';
         const rifaTitulo = rifaTituloMatch ? rifaTituloMatch[1] : 'Sorteo';
         const rifaDescripcion = rifaDescripcionMatch ? rifaDescripcionMatch[1] : 'Participa en nuestro sorteo';
         
         res.json({
+            cliente: clienteNombre,
             titulo: rifaTitulo,
             descripcion: rifaDescripcion,
-            titulo_completo: `SORTEOS YEPE - Gana ${rifaTitulo}`,
-            descripcion_completa: `Participa en SORTEOS YEPE. ${rifaDescripcion}. Sorteo 100% transparente en vivo.`
+            titulo_completo: `${clienteNombre} - Gana ${rifaTitulo}`,
+            descripcion_completa: `Participa en ${clienteNombre}. ${rifaDescripcion}. Sorteo 100% transparente en vivo.`
         });
         
-        console.log(`✅ /api/public/sorteo-info: ${rifaTitulo}`);
+        console.log(`✅ /api/public/sorteo-info: ${clienteNombre} - ${rifaTitulo}`);
     } catch (error) {
         console.error('❌ Error en /api/public/sorteo-info:', error.message);
         res.json({
+            cliente: 'SORTEOS EL TREBOL',
             titulo: 'Sorteo',
             descripcion: 'Participa en nuestro sorteo',
-            titulo_completo: 'SORTEOS YEPE - Sorteo 100% Transparente',
-            descripcion_completa: 'Participa en SORTEOS YEPE. Sorteo 100% transparente en vivo.'
+            titulo_completo: 'SORTEOS EL TREBOL - Sorteo 100% Transparente',
+            descripcion_completa: 'Participa en SORTEOS EL TREBOL. Sorteo 100% transparente en vivo.'
         });
     }
 });
