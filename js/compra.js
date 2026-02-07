@@ -319,17 +319,21 @@ async function cargarBoletosPublicos() {
 
         // ⚡ STAGE 1: ULTRA-RÁPIDO STATS (< 50ms)
         // Mostrar disponibilidad INSTANTÁNEAMENTE
+        const stageStartTime = performance.now();
         console.debug('📊 Cargando stats de disponibilidad...');
         
         try {
             const statsController = new AbortController();
-            const statsTimeoutId = setTimeout(() => statsController.abort(), 10000);  // Aumentado de 2s a 10s
+            // ⏱️ TIMEOUT AGRESIVO: Si /stats tarda > 3s, es un problema en el backend
+            const statsTimeoutId = setTimeout(() => statsController.abort(), 3000);
             
             const statsResponse = await fetch(`${endpoint}/api/public/boletos/stats`, {
                 signal: statsController.signal // Compatible con iPhone X
             });
             
             clearTimeout(statsTimeoutId);
+            const stageElapsed = Math.round(performance.now() - stageStartTime);
+            console.debug(`✅ /stats respondió en ${stageElapsed}ms`);
             
             if (statsResponse.ok) {
                 const statsData = await statsResponse.json();
@@ -378,7 +382,8 @@ async function cargarBoletosPublicos() {
                     if (availabilityNote) {
                         availabilityNote.textContent = `${disponiblesEnRango} boletos disponibles`;
                         availabilityNote.style.display = 'inline-block';
-                        console.debug(`✅ INSTANTÁNEO: ${disponiblesEnRango} boletos disponibles (${data.queryTime}ms)`);
+                        const finalElapsed = Math.round(performance.now() - stageStartTime);
+                        console.log(`🎯 [STAGE1] availability-note actualizado en ${finalElapsed}ms: "${disponiblesEnRango} boletos disponibles"`);
                     }
                     
                     // 🚀 CRÍTICO: Marcar como cargado una vez que /stats responde
@@ -415,7 +420,13 @@ async function cargarBoletosPublicos() {
                 availabilityNote.style.display = 'inline-block';
                 availabilityNote.style.color = 'red';
             }
-        }
+            
+            // ⚠️ IMPORTANTE: Marcar como cargado INCLUSO con error
+            // Sino, se queda bloqueado esperando forever
+            window.rifaplusBoletosLoaded = true;
+            if (!window.rifaplusSoldNumbers) window.rifaplusSoldNumbers = [];
+            if (!window.rifaplusReservedNumbers) window.rifaplusReservedNumbers = [];
+
         
         // 🔄 STAGE 2: BACKGROUND - Cargar datos completos SIN BLOQUEAR
         // Si es la primera carga, mostrar loading
