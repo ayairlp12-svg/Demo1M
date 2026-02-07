@@ -1843,15 +1843,16 @@ function aplicarFiltroDisponibles(activo) {
 
 /**
  * obtenerColorSeleccionado - Obtiene dinámicamente el color de los boletos seleccionados desde CSS
+ * @param {string|null} alpha - Valor de transparencia (ej: '66' para #RRGGBBAA). Si null, sin transparencia
  */
-function obtenerColorSeleccionado() {
+function obtenerColorSeleccionado(alpha = null) {
     try {
-        // Obtener el color de la variable CSS --seleccionado
-        const colorCSS = getComputedStyle(document.documentElement).getPropertyValue('--seleccionado').trim();
-        return colorCSS || '#0F3A7D'; // Color por defecto si no existe
+        let colorCSS = getComputedStyle(document.documentElement).getPropertyValue('--seleccionado').trim();
+        const colorBase = colorCSS || '#0F3A7D';
+        return alpha ? colorBase + alpha : colorBase;
     } catch (error) {
         console.warn('No se pudo obtener el color seleccionado, usando por defecto');
-        return '#0F3A7D';
+        return '#0F3A7D' + (alpha || '');
     }
 }
 
