@@ -2250,7 +2250,8 @@ app.get('/api/public/ordenes-cliente', async (req, res) => {
         }
 
         // Parsear boletos JSON a array
-        const ordenesFormateadas = await Promise.all(ordenes.map(async (orden) => {
+        // ⚠️ CRÍTICO: Limitar concurrencia a 3 para evitar "MaxClientsInSessionMode" en Vercel
+        const ordenesConPromesas = ordenes.map(async (orden) => {
             let boletosParsados = [];
             try {
                 let boletos = orden.boletos;
@@ -2310,7 +2311,10 @@ app.get('/api/public/ordenes-cliente', async (req, res) => {
                 createdAt: orden.created_at,
                 updatedAt: orden.updated_at
             };
-        }));
+        });
+
+        // Ejecutar promesas con concurrencia limitada (máx 3 simultáneas)
+        const ordenesFormateadas = await pLimit(ordenesConPromesas, 3);
 
         log('info', 'GET /api/public/ordenes-cliente exitoso', {
             whatsapp: whatsappSanitizado,
