@@ -242,12 +242,10 @@ async function inicializarSistemaCompra() {
  * Stage 2 (background) continúa sin bloquear
  */
 function startCargarBoletosPublicosConIntentos() {
-    // Esperar un tick del event loop para que el DOM esté 100% listo
-    requestAnimationFrame(() => {
-        // NO usar await - dejar que execute en background
-        cargarBoletosPublicos().catch(e => {
-            console.warn('Error en carga inicial de boletos:', e.message);
-        });
+    // ⚡ LLAMAR DIRECTAMENTE - Sin delays
+    // cargarBoletosPublicos() manejará todo asincronamente en background
+    cargarBoletosPublicos().catch(e => {
+        console.warn('❌ Error crítico en carga inicial de boletos:', e.message);
     });
 }
 
