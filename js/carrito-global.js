@@ -840,12 +840,28 @@ function calcularYLlenarOportunidades(numerosOrdenados, retryCount = 0) {
             
             console.log(`📦 [CARRITO] Generando oportunidades de ${numerosValidos.length} disponibles (${oportunidadesPorBoleto} por boleto)`);
             
+            // ✅ CRÍTICO: REMOVER números que YA ESTÁN VENDIDOS O APARTADOS
+            // Esto previene que se seleccionen números que luego el backend debe reemplazar
+            const sold = (window.rifaplusSoldNumbers && Array.isArray(window.rifaplusSoldNumbers)) ? window.rifaplusSoldNumbers : [];
+            const reserved = (window.rifaplusReservedNumbers && Array.isArray(window.rifaplusReservedNumbers)) ? window.rifaplusReservedNumbers : [];
+            const soldSet = new Set(sold.map(n => Number(n)));
+            const reservedSet = new Set(reserved.map(n => Number(n)));
+            
+            // Filtrar números vendidos o apartados
+            const numerosPuramenteDisponibles = numerosValidos.filter(n => !soldSet.has(n) && !reservedSet.has(n));
+            
+            if (numerosPuramenteDisponibles.length < numerosValidos.length) {
+                const removidos = numerosValidos.length - numerosPuramenteDisponibles.length;
+                console.warn(`⚠️  [CARRITO] Removidos ${removidos} números (${sold.length} vendidos + ${reserved.length} apartados) de ${numerosValidos.length}`);
+                console.log(`   Disponibles verdaderos: ${numerosPuramenteDisponibles.length}`);
+            }
+            
             // VALIDACIÓN: Crear un Set para búsqueda rápida
-            const disponiblesSet = new Set(numerosValidos);
+            const disponiblesSet = new Set(numerosPuramenteDisponibles);
             
             // ✅ CORRECCIÓN: UN SOLO POOL DE NÚMEROS (evita duplicados)
             // No hacer una copia POR BOLETO, sino UNA SOLA LISTA que se va consumiendo
-            const disponiblesPoolGlobal = [...numerosValidos]; // ÚNICO pool compartido
+            const disponiblesPoolGlobal = [...numerosPuramenteDisponibles]; // ÚNICO pool compartido
             
             const oportunidadesFiltradasPorBoleto = {};
             let totalEnviados = 0;
