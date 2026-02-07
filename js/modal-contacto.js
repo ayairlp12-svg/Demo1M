@@ -339,7 +339,6 @@ function guardarBoletoSeleccionadosEnStorage() {
         safeTrySetItem('rifaplus_boletos', JSON.stringify(boletos));
     } catch (e) {
         console.error('❌ Error preparando boletos para storage:', e);
-        }
     }
     
     // ✅ NOTA: Las oportunidades YA fueron calculadas por carrito-global.js
