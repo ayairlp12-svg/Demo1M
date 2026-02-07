@@ -1052,11 +1052,24 @@ async function guardarOrden() {
                         console.warn('⚠️  No se pudo actualizar disponibilidad:', e?.message);
                     }
                 }
-
-                // GUARDAR EN LOCALSTORAGE
-                localStorage.setItem('rifaplus_orden_actual', JSON.stringify(ordenActual));
-                localStorage.setItem('rifaplus_orden_url', respuestaExitosa.url || '');
-                localStorage.setItem('rifaplus_orden_confirmada', 'true');
+                // GUARDAR EN LOCALSTORAGE (con fallback si quota se excede)
+                try {
+                    localStorage.setItem('rifaplus_orden_actual', JSON.stringify(ordenActual));
+                    localStorage.setItem('rifaplus_orden_url', respuestaExitosa.url || '');
+                    localStorage.setItem('rifaplus_orden_confirmada', 'true');
+                } catch (e) {
+                    if (e.name === 'QuotaExceededError') {
+                        console.warn('⚠️  [GRACEFUL FALLBACK] localStorage quota exceeded para datos de orden');
+                        // Intentar al menos guardar la URL como fallback
+                        try {
+                            localStorage.setItem('rifaplus_orden_url', respuestaExitosa.url || '');
+                        } catch (e2) {
+                            console.warn('    ℹ️  Los datos están en BD, se recuperarán desde API');
+                        }
+                    } else {
+                        throw e;
+                    }
+                }
                 
                 // ✅ IMPORTANTE: Guardar DATOS FINALES de la orden (después de posibles filtrados por conflicto)
                 // Esto es lo que orden-confirmada.html mostrará al usuario
@@ -1070,18 +1083,40 @@ async function guardarOrden() {
                     fecha: new Date().toISOString(),
                     esResultadoDeConflicto: payload.boletos.length !== boletosArray.length ? false : undefined  // Solo si hubo cambio
                 };
-                localStorage.setItem('rifaplus_orden_final', JSON.stringify(datosFinalesOrden));
-                console.log('📦 Datos finales de la orden guardados para orden-confirmada:', datosFinalesOrden);
+                
+                // ✅ INTENTAR guardar en localStorage, pero con fallback si no hay espacio
+                try {
+                    localStorage.setItem('rifaplus_orden_final', JSON.stringify(datosFinalesOrden));
+                    console.log('📦 Datos finales de la orden guardados para orden-confirmada:', datosFinalesOrden);
+                } catch (e) {
+                    if (e.name === 'QuotaExceededError') {
+                        console.warn('⚠️  [GRACEFUL FALLBACK] localStorage quota exceeded para rifaplus_orden_final');
+                        console.warn('    ℹ️  Los datos están en la BD, se recuperarán en orden-confirmada.html desde API');
+                        // NO hacer throw - la orden está en BD, es solo para cache local
+                    } else {
+                        throw e;
+                    }
+                }
                 
                 // ✅ IMPORTANTE: Actualizar TAMBIÉN rifaplus_oportunidades con los datos correctos filtrados
                 // Esto asegura que orden-confirmada.html y mis-boletos.html vean los datos correctos
-                localStorage.setItem('rifaplus_oportunidades', JSON.stringify({
-                    boletosOcultos: payload.boletosOcultos || [],
-                    boletosSeleccionados: payload.boletos || [],
-                    cantidad: (payload.boletosOcultos || []).length,
-                    oportunidadesPorBoleto: {} // Vacío porque ya no es necesario
-                }));
-                console.log('✅ localStorage rifaplus_oportunidades actualizado con datos filtrados:', payload.boletosOcultos);
+                try {
+                    localStorage.setItem('rifaplus_oportunidades', JSON.stringify({
+                        boletosOcultos: payload.boletosOcultos || [],
+                        boletosSeleccionados: payload.boletos || [],
+                        cantidad: (payload.boletosOcultos || []).length,
+                        oportunidadesPorBoleto: {} // Vacío porque ya no es necesario
+                    }));
+                    console.log('✅ localStorage rifaplus_oportunidades actualizado con datos filtrados:', payload.boletosOcultos);
+                } catch (e) {
+                    if (e.name === 'QuotaExceededError') {
+                        console.warn('⚠️  [GRACEFUL FALLBACK] localStorage quota exceeded para rifaplus_oportunidades');
+                        console.warn('    ℹ️  Los datos están en la BD, se recuperarán desde API');
+                        // NO hacer throw - la orden está en BD
+                    } else {
+                        throw e;
+                    }
+                }
 
                 // GUARDAR EN HISTORIAL
                 try {
