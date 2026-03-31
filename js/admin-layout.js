@@ -16,6 +16,15 @@ const ADMIN_LAYOUT = {
             || window.location.origin;
     },
     authPromise: null,
+
+    esPaginaLoginAdmin() {
+        const rawPath = window.location.pathname || '';
+        const paginaActual = rawPath.split('/').pop() || 'admin-dashboard.html';
+        const paginaNormalizada = String(paginaActual).trim().toLowerCase();
+
+        return paginaNormalizada === 'admin-dashboard.html'
+            || paginaNormalizada === 'admin-dashboard';
+    },
     
     /**
      * Inicializar el layout del admin
@@ -77,6 +86,7 @@ const ADMIN_LAYOUT = {
                      localStorage.getItem('token');
         
         const paginaActual = window.location.pathname.split('/').pop() || 'admin-dashboard.html';
+        const esPaginaLogin = this.esPaginaLoginAdmin();
         
         // Si hay token, asegurar que está en todas las claves
         if (token) {
@@ -85,7 +95,7 @@ const ADMIN_LAYOUT = {
         }
         
         // Si no hay token y NO estamos en admin-dashboard, redirigir
-        if (!token && paginaActual !== 'admin-dashboard.html') {
+        if (!token && !esPaginaLogin) {
             console.warn('⚠️  [AdminLayout] Sin token, redirigiendo al login...');
             localStorage.setItem('redirectAfterLogin', paginaActual);
             this.finalizarChequeoVisual();
@@ -117,7 +127,7 @@ const ADMIN_LAYOUT = {
             localStorage.removeItem('admin_token');
             localStorage.removeItem('token');
 
-            if (paginaActual !== 'admin-dashboard.html') {
+            if (!esPaginaLogin) {
                 localStorage.setItem('redirectAfterLogin', paginaActual);
                 this.finalizarChequeoVisual();
                 window.location.href = 'admin-dashboard.html';
