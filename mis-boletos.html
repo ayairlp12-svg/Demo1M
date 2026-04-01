@@ -261,7 +261,7 @@
                             <input 
                                 type="file" 
                                 id="archivoComprobante" 
-                                accept="image/*,.pdf" 
+                                accept="image/*,.pdf,.heic,.heif" 
                                 required
                                 class="input-file"
                             >
@@ -275,7 +275,7 @@
                         </div>
                         
                         <small style="color: var(--text-light); display: block; margin-top: 0.75rem; text-align: center;">
-                            📄 Formatos: JPG, PNG, PDF — Máximo: 5MB
+                            📄 Formatos: JPG, PNG, WEBP, HEIC, HEIF, PDF — Máximo: 5MB
                         </small>
                     </div>
 
@@ -288,6 +288,8 @@
                             <p style="margin-top: 0.5rem; color: var(--text-light);">Archivo PDF seleccionado</p>
                         </div>
                     </div>
+
+                    <div id="estadoSubidaComprobante" style="display: none; margin-bottom: 0.85rem; padding: 0.85rem 0.95rem; border-radius: var(--radius-md); font-size: 0.92rem; line-height: 1.45;"></div>
                 </form>
             </div>
             <div class="modal-footer modal-footer-contacto">
@@ -2682,20 +2684,30 @@
         }
 
         function validarTipoArchivo(file) {
+            const tiposValidos = [
+                'image/jpeg',
+                'image/png',
+                'image/webp',
+                'image/heic',
+                'image/heif',
+                'application/pdf'
+            ];
+            const extensionesValidas = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'pdf'];
+
             // Validar MIME type
-            if (!TIPOS_ARCHIVO_VALIDOS.includes(file.type)) {
+            if (file.type && !tiposValidos.includes(file.type)) {
                 return {
                     valido: false,
-                    error: `⚠️ Tipo de archivo no permitido. Usa JPG, PNG o PDF.`
+                    error: `⚠️ Tipo de archivo no permitido. Usa JPG, PNG, WEBP, HEIC, HEIF o PDF.`
                 };
             }
 
             // Validar extensión como fallback
             const ext = file.name.split('.').pop().toLowerCase();
-            if (!['jpg', 'jpeg', 'png', 'pdf'].includes(ext)) {
+            if (!extensionesValidas.includes(ext)) {
                 return {
                     valido: false,
-                    error: `⚠️ Extensión de archivo no permitida. Usa .jpg, .png o .pdf`
+                    error: `⚠️ Extensión de archivo no permitida. Usa .jpg, .png, .webp, .heic, .heif o .pdf`
                 };
             }
 
@@ -3653,6 +3665,7 @@
             pdfPrevia.style.display = 'none';
             btnSubirComprobante.disabled = false;
             btnSubirComprobante.innerHTML = '<i class="fas fa-upload"></i> Subir Comprobante';
+            limpiarEstadoSubidaComprobante();
 
             // Abrir modal
             if (modal) {
@@ -3666,6 +3679,8 @@
             const vistaPreviaDiv = document.getElementById('vistaPreviaComprobante');
             const imagenPrevia = document.getElementById('imagenPrevia');
             const pdfPrevia = document.getElementById('pdfPrevia');
+
+            limpiarEstadoSubidaComprobante();
 
             if (!file) {
                 vistaPreviaDiv.style.display = 'none';
@@ -3695,7 +3710,10 @@
             imagenPrevia.style.display = 'none';
             pdfPrevia.style.display = 'none';
 
-            if (file.type.startsWith('image/')) {
+            const extension = (file.name.split('.').pop() || '').toLowerCase();
+            const esHeic = extension === 'heic' || extension === 'heif' || file.type === 'image/heic' || file.type === 'image/heif';
+
+            if (file.type.startsWith('image/') && !esHeic) {
                 const reader = new FileReader();
                 reader.onerror = function() {
                     rifaplusUtils.showFeedback('❌ Error al leer la imagen', 'error');
@@ -3707,7 +3725,18 @@
                     imagenPrevia.style.display = 'block';
                 };
                 reader.readAsDataURL(file);
+            } else if (esHeic) {
+                pdfPrevia.innerHTML = `
+                    <i class="fas fa-image" style="font-size: 2rem; color: var(--primary);"></i>
+                    <p style="margin-top: 0.5rem; color: var(--text-light);">Archivo HEIC/HEIF seleccionado</p>
+                    <small style="color: var(--text-light); display: block; margin-top: 0.35rem;">La vista previa puede no estar disponible en este navegador, pero el archivo sí se enviará.</small>
+                `;
+                pdfPrevia.style.display = 'block';
             } else if (file.type === 'application/pdf') {
+                pdfPrevia.innerHTML = `
+                    <i class="fas fa-file-pdf" style="font-size: 2rem; color: var(--danger);"></i>
+                    <p style="margin-top: 0.5rem; color: var(--text-light);">Archivo PDF seleccionado</p>
+                `;
                 pdfPrevia.style.display = 'block';
             }
         }
@@ -3718,6 +3747,101 @@
                 modal.classList.remove('show');
                 document.body.style.overflow = 'auto';
             }
+            limpiarEstadoSubidaComprobante();
+        }
+
+        function mostrarEstadoSubidaComprobante(mensaje, tipo = 'info') {
+            const estadoEl = document.getElementById('estadoSubidaComprobante');
+            if (!estadoEl) return;
+
+            const estilos = {
+                error: {
+                    color: '#8f1d1d',
+                    background: 'rgba(198, 111, 111, 0.12)',
+                    border: '1px solid rgba(198, 111, 111, 0.28)'
+                },
+                warning: {
+                    color: '#8a5c09',
+                    background: 'rgba(215, 176, 122, 0.18)',
+                    border: '1px solid rgba(215, 176, 122, 0.3)'
+                },
+                success: {
+                    color: '#2f5d42',
+                    background: 'rgba(95, 123, 105, 0.12)',
+                    border: '1px solid rgba(95, 123, 105, 0.25)'
+                },
+                info: {
+                    color: '#12324b',
+                    background: 'rgba(15, 58, 125, 0.08)',
+                    border: '1px solid rgba(15, 58, 125, 0.16)'
+                }
+            };
+
+            const estilo = estilos[tipo] || estilos.info;
+            estadoEl.style.display = 'block';
+            estadoEl.style.color = estilo.color;
+            estadoEl.style.background = estilo.background;
+            estadoEl.style.border = estilo.border;
+            estadoEl.textContent = mensaje;
+        }
+
+        function limpiarEstadoSubidaComprobante() {
+            const estadoEl = document.getElementById('estadoSubidaComprobante');
+            if (!estadoEl) return;
+            estadoEl.style.display = 'none';
+            estadoEl.textContent = '';
+        }
+
+        async function obtenerMensajeErrorUpload(response) {
+            try {
+                const data = await response.clone().json();
+                return data?.mensaje || data?.message || data?.error || '';
+            } catch (_) {
+                try {
+                    const text = await response.clone().text();
+                    return String(text || '').trim();
+                } catch (_) {
+                    return '';
+                }
+            }
+        }
+
+        async function construirMensajeErrorComprobante(error, response = null) {
+            if (error?.name === 'AbortError') {
+                return 'La subida tardó demasiado. Intenta con mejor conexión o con un archivo más pequeño.';
+            }
+
+            if (!navigator.onLine) {
+                return 'No pudimos subir el comprobante porque tu dispositivo parece estar sin internet.';
+            }
+
+            if (response) {
+                const detalle = await obtenerMensajeErrorUpload(response);
+
+                if (response.status === 400) {
+                    return detalle || 'El archivo o los datos enviados no son válidos. Revisa el comprobante e inténtalo de nuevo.';
+                }
+                if (response.status === 401 || response.status === 403) {
+                    return detalle || 'No tienes permiso para subir comprobante a esta orden. Verifica que sea tu orden.';
+                }
+                if (response.status === 404) {
+                    return detalle || 'La orden ya no está disponible o ya fue procesada. Recarga tus órdenes y revisa su estado.';
+                }
+                if (response.status === 413) {
+                    return 'El archivo es demasiado grande. Sube uno de máximo 5 MB.';
+                }
+                if (response.status >= 500) {
+                    return detalle || 'El servidor no pudo procesar el comprobante en este momento. Intenta de nuevo en unos minutos.';
+                }
+
+                return detalle || `No se pudo subir el comprobante. Error ${response.status}.`;
+            }
+
+            if (error instanceof TypeError) {
+                return 'No se pudo conectar con el servidor. Revisa tu internet e inténtalo otra vez.';
+            }
+
+            return error?.message || 'No se pudo subir el comprobante. Intenta nuevamente.';
         }
 
         function cerrarModalComprobanteConfirmado() {
@@ -3732,32 +3856,41 @@
             const archivoInput = document.getElementById('archivoComprobante');
             const btnSubirComprobante = document.getElementById('btnSubirComprobante');
             const file = archivoInput.files[0];
+            limpiarEstadoSubidaComprobante();
 
             // Validaciones de seguridad
             if (!appState.ordenActualComprobante || !appState.ordenActualComprobante.id) {
-                rifaplusUtils.showFeedback('❌ Error: Orden no válida', 'error');
+                const mensaje = 'No pudimos identificar la orden para este comprobante. Cierra el modal y vuelve a intentarlo desde tu orden.';
+                mostrarEstadoSubidaComprobante(mensaje, 'error');
+                rifaplusUtils.showFeedback(`❌ ${mensaje}`, 'error');
                 return;
             }
 
             if (!appState.currentWhatsapp) {
-                rifaplusUtils.showFeedback('❌ Error: WhatsApp no válido', 'error');
+                const mensaje = 'Falta el número de WhatsApp asociado a la orden. Busca de nuevo tu orden antes de subir el comprobante.';
+                mostrarEstadoSubidaComprobante(mensaje, 'error');
+                rifaplusUtils.showFeedback(`❌ ${mensaje}`, 'error');
                 return;
             }
 
             if (!file) {
-                rifaplusUtils.showFeedback('⚠️ Selecciona un archivo', 'warning');
+                const mensaje = 'Selecciona una imagen o PDF de tu comprobante antes de continuar.';
+                mostrarEstadoSubidaComprobante(mensaje, 'warning');
+                rifaplusUtils.showFeedback(`⚠️ ${mensaje}`, 'warning');
                 return;
             }
 
             // Re-validar archivo (en caso de manipulación)
             const validacionTipo = validarTipoArchivo(file);
             if (!validacionTipo.valido) {
+                mostrarEstadoSubidaComprobante(validacionTipo.error, 'warning');
                 rifaplusUtils.showFeedback(validacionTipo.error, 'warning');
                 return;
             }
 
             const validacionTamaño = validarTamañoArchivo(file);
             if (!validacionTamaño.valido) {
+                mostrarEstadoSubidaComprobante(validacionTamaño.error, 'warning');
                 rifaplusUtils.showFeedback(validacionTamaño.error, 'warning');
                 return;
             }
@@ -3790,28 +3923,27 @@
 
                 // Manejo de errores HTTP
                 if (response.status === 403) {
-                    throw new Error('No tienes permiso para subir comprobante a esta orden.');
+                    throw { response };
                 }
 
                 if (response.status === 404) {
-                    throw new Error('La orden no existe o ya fue procesada.');
+                    throw { response };
                 }
 
                 if (response.status === 400) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.mensaje || 'Datos inválidos. Verifica e intenta de nuevo.');
+                    throw { response };
                 }
 
                 if (response.status === 413) {
-                    throw new Error('El archivo es demasiado grande. Máximo 5MB.');
+                    throw { response };
                 }
 
                 if (response.status === 500) {
-                    throw new Error('Error en el servidor. Intenta más tarde.');
+                    throw { response };
                 }
 
                 if (!response.ok) {
-                    throw new Error(`Error ${response.status}: No se pudo subir el comprobante`);
+                    throw { response };
                 }
 
                 const result = await response.json();
@@ -3866,12 +3998,9 @@
 
             } catch (error) {
                 console.error('Error al subir comprobante:', error);
-
-                if (error.name === 'AbortError') {
-                    rifaplusUtils.showFeedback('⏱️ La carga tardó demasiado. Intenta con un archivo más pequeño.', 'error');
-                } else {
-                    rifaplusUtils.showFeedback(`❌ ${error.message}`, 'error');
-                }
+                const mensajeError = await construirMensajeErrorComprobante(error, error?.response || null);
+                mostrarEstadoSubidaComprobante(mensajeError, 'error');
+                rifaplusUtils.showFeedback(`❌ ${mensajeError}`, 'error');
 
                 // NO cerrar modal: permitir reintentar
                 btnSubirComprobante.disabled = false;

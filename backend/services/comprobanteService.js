@@ -57,11 +57,23 @@ function validarArchivo(archivo) {
     }
 
     // Validar MIME type
-    const TIPOS_VALIDOS = ['image/jpeg', 'image/png', 'application/pdf'];
-    if (!TIPOS_VALIDOS.includes(archivo.mimetype)) {
+    const TIPOS_VALIDOS = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/heic',
+        'image/heif',
+        'application/pdf'
+    ];
+    const EXTENSIONES_VALIDAS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'pdf'];
+    const extension = String(archivo.name || '').split('.').pop().toLowerCase();
+    const mimeValido = !archivo.mimetype || TIPOS_VALIDOS.includes(archivo.mimetype);
+    const extensionValida = EXTENSIONES_VALIDAS.includes(extension);
+
+    if (!mimeValido && !extensionValida) {
         return {
             valido: false,
-            error: 'Tipo de archivo no permitido. Solo JPG, PNG o PDF'
+            error: 'Tipo de archivo no permitido. Solo JPG, PNG, WEBP, HEIC, HEIF o PDF'
         };
     }
 
