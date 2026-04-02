@@ -22,6 +22,15 @@ exports.up = async (knex) => {
     console.log('═══════════════════════════════════════════════════════════════');
     
     try {
+        // Verificar si la tabla order_oportunidades existe
+        const tableExists = await knex.schema.hasTable('order_oportunidades');
+        
+        if (!tableExists) {
+            console.log('\n⏭️  Tabla order_oportunidades no existe, saltando esta migración.');
+            console.log('═══════════════════════════════════════════════════════════════\n');
+            return;
+        }
+        
         // ═══════════════════════════════════════════════════════════════
         // PASO 1: ELIMINAR ÍNDICES REDUNDANTES (limpieza)
         // ═══════════════════════════════════════════════════════════════
@@ -30,21 +39,13 @@ exports.up = async (knex) => {
         
         // Redundancia 1: ordenes_numero_orden_index duplica idx_ordenes_numero_orden
         console.log('  Eliminando: ordenes_numero_orden_index...');
-        try {
-            await knex.raw('DROP INDEX IF EXISTS ordenes_numero_orden_index CASCADE;');
-            console.log('     ✅ ordenes_numero_orden_index eliminado');
-        } catch (err) {
-            console.log('     ⚠️  ordenes_numero_orden_index no encontrado (OK)');
-        }
+        await knex.raw('DROP INDEX IF EXISTS ordenes_numero_orden_index CASCADE;');
+        console.log('     ✅ ordenes_numero_orden_index eliminado');
         
         // Redundancia 2: idx_estado_boleto duplica idx_boletos_estado
         console.log('  Eliminando: idx_estado_boleto...');
-        try {
-            await knex.raw('DROP INDEX IF EXISTS idx_estado_boleto CASCADE;');
-            console.log('     ✅ idx_estado_boleto eliminado');
-        } catch (err) {
-            console.log('     ⚠️  idx_estado_boleto no encontrado (OK)');
-        }
+        await knex.raw('DROP INDEX IF EXISTS idx_estado_boleto CASCADE;');
+        console.log('     ✅ idx_estado_boleto eliminado');
         
         // ═══════════════════════════════════════════════════════════════
         // PASO 2: CREAR ÍNDICES FALTANTES EN order_oportunidades
@@ -53,72 +54,47 @@ exports.up = async (knex) => {
         console.log('\n🔧 PASO 2: Creando índices CRÍTICOS en order_oportunidades...');
         
         // CRÍTICO #1: Búsquedas por numero_orden (FK a ordenes)
-        // Usado en: liberarOportunidades(), obtenerOportunidadesOrden()
         console.log('  Creando: idx_opp_numero_orden...');
-        try {
-            await knex.raw(`
-                CREATE INDEX IF NOT EXISTS idx_opp_numero_orden 
-                ON order_oportunidades(numero_orden)
-                WHERE numero_orden IS NOT NULL;
-            `);
-            console.log('     ✅ idx_opp_numero_orden creado');
-        } catch (err) {
-            console.log('     ⚠️  idx_opp_numero_orden ya existe:', err.message.substring(0, 50));
-        }
+        await knex.raw(`
+            CREATE INDEX IF NOT EXISTS idx_opp_numero_orden 
+            ON order_oportunidades(numero_orden)
+            WHERE numero_orden IS NOT NULL;
+        `);
+        console.log('     ✅ idx_opp_numero_orden');
         
         // CRÍTICO #2: Búsquedas por número de oportunidad
-        // Usado en: validarOportunidades(), whereIn(numero_oportunidad)
         console.log('  Creando: idx_opp_numero_oportunidad...');
-        try {
-            await knex.raw(`
-                CREATE INDEX IF NOT EXISTS idx_opp_numero_oportunidad 
-                ON order_oportunidades(numero_oportunidad);
-            `);
-            console.log('     ✅ idx_opp_numero_oportunidad creado');
-        } catch (err) {
-            console.log('     ⚠️  idx_opp_numero_oportunidad ya existe:', err.message.substring(0, 50));
-        }
+        await knex.raw(`
+            CREATE INDEX IF NOT EXISTS idx_opp_numero_oportunidad 
+            ON order_oportunidades(numero_oportunidad);
+        `);
+        console.log('     ✅ idx_opp_numero_oportunidad');
         
         // CRÍTICO #3: Búsquedas por estado (disponibles/asignadas)
-        // Usado en: obtenerOportunidadesDisponibles()
         console.log('  Creando: idx_opp_estado...');
-        try {
-            await knex.raw(`
-                CREATE INDEX IF NOT EXISTS idx_opp_estado 
-                ON order_oportunidades(estado) 
-                WHERE estado = 'disponible';
-            `);
-            console.log('     ✅ idx_opp_estado creado');
-        } catch (err) {
-            console.log('     ⚠️  idx_opp_estado ya existe:', err.message.substring(0, 50));
-        }
+        await knex.raw(`
+            CREATE INDEX IF NOT EXISTS idx_opp_estado 
+            ON order_oportunidades(estado) 
+            WHERE estado = 'disponible';
+        `);
+        console.log('     ✅ idx_opp_estado');
         
-        // CRÍTICO #4: Composición (estado, numero_orden) - queries más comunes
-        // Usado en: WHERE estado='disponible' AND numero_orden IS NULL
+        // CRÍTICO #4: Composición (estado, numero_orden)
         console.log('  Creando: idx_opp_estado_numero_orden...');
-        try {
-            await knex.raw(`
-                CREATE INDEX IF NOT EXISTS idx_opp_estado_numero_orden 
-                ON order_oportunidades(estado, numero_orden);
-            `);
-            console.log('     ✅ idx_opp_estado_numero_orden creado');
-        } catch (err) {
-            console.log('     ⚠️  idx_opp_estado_numero_orden ya existe:', err.message.substring(0, 50));
-        }
+        await knex.raw(`
+            CREATE INDEX IF NOT EXISTS idx_opp_estado_numero_orden 
+            ON order_oportunidades(estado, numero_orden);
+        `);
+        console.log('     ✅ idx_opp_estado_numero_orden');
         
-        // CRÍTICO #5: Para liberación rápida (WHERE numero_orden = X AND asignado = true)
-        // Usado en: liberarOportunidades()
+        // CRÍTICO #5: Para liberación rápida
         console.log('  Creando: idx_opp_numero_orden_asignado...');
-        try {
-            await knex.raw(`
-                CREATE INDEX IF NOT EXISTS idx_opp_numero_orden_asignado 
-                ON order_oportunidades(numero_orden, asignado) 
-                WHERE asignado = true;
-            `);
-            console.log('     ✅ idx_opp_numero_orden_asignado creado');
-        } catch (err) {
-            console.log('     ⚠️  idx_opp_numero_orden_asignado ya existe:', err.message.substring(0, 50));
-        }
+        await knex.raw(`
+            CREATE INDEX IF NOT EXISTS idx_opp_numero_orden_asignado 
+            ON order_oportunidades(numero_orden, asignado) 
+            WHERE asignado = true;
+        `);
+        console.log('     ✅ idx_opp_numero_orden_asignado');
         
         // ═══════════════════════════════════════════════════════════════
         // PASO 3: VERIFICAR QUE ÍNDICES CRÍTICOS EN OTRAS TABLAS EXISTAN
@@ -128,57 +104,34 @@ exports.up = async (knex) => {
         
         // Asegurar que boletos_estado tiene idx_boletos_estado
         console.log('  Verificando: idx_boletos_estado...');
-        try {
-            await knex.raw(`
-                CREATE INDEX IF NOT EXISTS idx_boletos_estado 
-                ON boletos_estado(estado);
-            `);
-            console.log('     ✅ idx_boletos_estado presente');
-        } catch (err) {
-            console.log('     ⚠️  Error:', err.message.substring(0, 50));
-        }
+        await knex.raw(`
+            CREATE INDEX IF NOT EXISTS idx_boletos_estado 
+            ON boletos_estado(estado);
+        `);
+        console.log('     ✅');
         
         // Asegurar que ordenes tiene idx_ordenes_numero_orden
         console.log('  Verificando: idx_ordenes_numero_orden...');
-        try {
-            await knex.raw(`
-                CREATE INDEX IF NOT EXISTS idx_ordenes_numero_orden 
-                ON ordenes(numero_orden);
-            `);
-            console.log('     ✅ idx_ordenes_numero_orden presente');
-        } catch (err) {
-            console.log('     ⚠️  Error:', err.message.substring(0, 50));
-        }
+        await knex.raw(`
+            CREATE INDEX IF NOT EXISTS idx_ordenes_numero_orden 
+            ON ordenes(numero_orden);
+        `);
+        console.log('     ✅');
         
         // ═══════════════════════════════════════════════════════════════
         // PASO 4: ACTUALIZAR ESTADÍSTICAS DE QUERY PLANNER
         // ═══════════════════════════════════════════════════════════════
         
-        console.log('\n📈 PASO 4: Actualizando estadísticas para query planner...');
+        console.log('\n📈 PASO 4: Actualizando estadísticas...');
         
-        try {
-            console.log('  ANALYZE: boletos_estado...');
-            await knex.raw('ANALYZE boletos_estado;');
-            console.log('     ✅');
-        } catch (e) {
-            console.log('     ⚠️  Saltado (tabla puede no existir)');
-        }
+        await knex.raw('ANALYZE boletos_estado;');
+        console.log('     ✅ boletos_estado');
         
-        try {
-            console.log('  ANALYZE: ordenes...');
-            await knex.raw('ANALYZE ordenes;');
-            console.log('     ✅');
-        } catch (e) {
-            console.log('     ⚠️  Saltado (tabla puede no existir)');
-        }
+        await knex.raw('ANALYZE ordenes;');
+        console.log('     ✅ ordenes');
         
-        try {
-            console.log('  ANALYZE: orden_oportunidades...');
-            await knex.raw('ANALYZE orden_oportunidades;');
-            console.log('     ✅');
-        } catch (e) {
-            console.log('     ⚠️  Saltado (tabla puede no existir)');
-        }
+        await knex.raw('ANALYZE orden_oportunidades;');
+        console.log('     ✅ orden_oportunidades');
         
         // ═══════════════════════════════════════════════════════════════
         // RESUMEN FINAL

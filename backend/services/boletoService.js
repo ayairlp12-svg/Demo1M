@@ -14,6 +14,51 @@ const db = require('../db');
 const retryService = require('./retryService');
 
 class BoletoService {
+  static _barajarNumeros(numeros) {
+    const copia = Array.isArray(numeros) ? [...numeros] : [];
+    for (let i = copia.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copia[i], copia[j]] = [copia[j], copia[i]];
+    }
+    return copia;
+  }
+
+  static _obtenerTotalBoletosConfig() {
+    const configManager = require('../config-manager').getInstance();
+    return Number(configManager.totalBoletos) || 0;
+  }
+
+  static _normalizarExclusiones(excludeNumbers, totalBoletos) {
+    const exclusivos = Array.isArray(excludeNumbers) ? excludeNumbers : [];
+    return new Set(
+      exclusivos
+        .map((n) => Number(n))
+        .filter((n) => Number.isInteger(n) && n >= 0 && n < totalBoletos)
+    );
+  }
+
+  static _queryBoletosDisponibles() {
+    return db('boletos_estado')
+      .where('estado', 'disponible')
+      .whereNull('numero_orden');
+  }
+
+  static async _obtenerVentanaDisponiblesDesde(pivote, limite) {
+    return this._queryBoletosDisponibles()
+      .where('numero', '>=', pivote)
+      .select('numero')
+      .orderBy('numero', 'asc')
+      .limit(limite);
+  }
+
+  static async _obtenerVentanaDisponiblesAntesDe(pivote, limite) {
+    return this._queryBoletosDisponibles()
+      .where('numero', '<', pivote)
+      .select('numero')
+      .orderBy('numero', 'asc')
+      .limit(limite);
+  }
+
   /**
    * Obtiene X boletos disponibles para mostrar en UI
    * OPTIMIZADO: No carga 1M registros, solo pagina actual
@@ -23,8 +68,7 @@ class BoletoService {
    */
   static async obtenerBoletosDisponibles(limit = 50, offset = 0) {
     try {
-      const boletos = await db('boletos_estado')
-        .where('estado', 'disponible')
+      const boletos = await this._queryBoletosDisponibles()
         .orderBy('numero', 'asc')
         .limit(limit)
         .offset(offset)
@@ -44,14 +88,146 @@ class BoletoService {
    */
   static async contarBoletosDisponibles() {
     try {
-      const resultado = await db('boletos_estado')
-        .where('estado', 'disponible')
+      const resultado = await this._queryBoletosDisponibles()
         .count('* as total')
         .first();
 
       return resultado.total || 0;
     } catch (error) {
       console.error('Error contarBoletosDisponibles:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene el estado de boletos no disponibles dentro de un rango.
+   * Pensado para la vista pública paginada/rangos, evitando cargar el universo completo.
+   * @param {number} inicio
+   * @param {number} fin
+   * @returns {Promise<{sold: number[], reserved: number[]}>}
+   */
+  static async obtenerEstadoNoDisponibleEnRango(inicio, fin) {
+    try {
+      const rangoInicio = Number(inicio);
+      const rangoFin = Number(fin);
+
+      if (!Number.isInteger(rangoInicio) || !Number.isInteger(rangoFin) || rangoInicio < 0 || rangoFin < rangoInicio) {
+        throw new Error('Rango inválido para obtener estado de boletos');
+      }
+
+      const rows = await db('boletos_estado')
+        .whereIn('estado', ['vendido', 'apartado'])
+        .whereBetween('numero', [rangoInicio, rangoFin])
+        .select('numero', 'estado')
+        .orderBy('numero', 'asc');
+
+      const sold = [];
+      const reserved = [];
+
+      rows.forEach((row) => {
+        const numero = Number(row.numero);
+        if (!Number.isInteger(numero)) return;
+
+        if (row.estado === 'vendido') {
+          sold.push(numero);
+        } else if (row.estado === 'apartado') {
+          reserved.push(numero);
+        }
+      });
+
+      return { sold, reserved };
+    } catch (error) {
+      console.error('Error obtenerEstadoNoDisponibleEnRango:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Genera boletos aleatorios DISPONIBLES en todo el universo del sorteo.
+   * No depende del rango visible en UI.
+   * @param {number} cantidad
+   * @param {Array<number>} excludeNumbers
+   * @returns {Promise<number[]>}
+   */
+  static async obtenerBoletosAleatoriosDisponibles(cantidad, excludeNumbers = []) {
+    try {
+      const cantidadSolicitada = Number(cantidad);
+      if (!Number.isInteger(cantidadSolicitada) || cantidadSolicitada < 1) {
+        throw new Error('cantidad debe ser un entero mayor a 0');
+      }
+
+      const totalBoletos = this._obtenerTotalBoletosConfig();
+      if (totalBoletos < 1) {
+        throw new Error('No hay totalBoletos configurado');
+      }
+
+      const excludeSet = this._normalizarExclusiones(excludeNumbers, totalBoletos);
+
+      const disponiblesTotales = Number(await this.contarBoletosDisponibles()) || 0;
+      if (disponiblesTotales <= 0) {
+        return [];
+      }
+
+      const objetivo = Math.min(cantidadSolicitada, disponiblesTotales);
+      const seleccionados = new Set();
+      const pivotesUsados = new Set();
+      const MAX_RONDAS = objetivo >= 500 ? 4 : 3;
+
+      for (let ronda = 0; ronda < MAX_RONDAS && seleccionados.size < objetivo; ronda += 1) {
+        const faltantes = objetivo - seleccionados.size;
+        const consultasPorRonda = Math.min(4, Math.max(2, Math.ceil(faltantes / 50)));
+        const tamanoVentana = Math.min(
+          4000,
+          Math.max(
+            faltantes * 8,
+            consultasPorRonda * 120
+          )
+        );
+
+        const consultas = [];
+        let guard = 0;
+
+        while (consultas.length < consultasPorRonda && guard < consultasPorRonda * 10) {
+          guard += 1;
+          const pivote = Math.floor(Math.random() * totalBoletos);
+          if (pivotesUsados.has(pivote)) continue;
+          pivotesUsados.add(pivote);
+
+          consultas.push(this._obtenerVentanaDisponiblesDesde(pivote, tamanoVentana));
+          consultas.push(this._obtenerVentanaDisponiblesAntesDe(pivote, tamanoVentana));
+        }
+
+        if (consultas.length === 0) {
+          break;
+        }
+
+        const resultados = await Promise.all(consultas);
+        const candidatos = [];
+
+        resultados.forEach((rows) => {
+          rows.forEach((row) => {
+            const numero = Number(row.numero);
+            if (!Number.isInteger(numero)) return;
+            if (excludeSet.has(numero) || seleccionados.has(numero)) return;
+            candidatos.push(numero);
+          });
+        });
+
+        if (candidatos.length === 0) {
+          continue;
+        }
+
+        const mezcla = this._barajarNumeros(Array.from(new Set(candidatos)));
+        mezcla.forEach((numero) => {
+          if (seleccionados.size < objetivo) {
+            seleccionados.add(numero);
+          }
+        });
+      }
+
+      return this._barajarNumeros(Array.from(seleccionados)).slice(0, objetivo);
+    } catch (error) {
+      console.error('Error obtenerBoletosAleatoriosDisponibles:', error.message);
       throw error;
     }
   }
@@ -76,8 +252,7 @@ class BoletoService {
 
       // ===== VALIDAR RANGO DE NÚMEROS =====
       // Obtener totalBoletos desde config manager (cachea en memoria)
-      const configManager = require('../config-manager').getInstance();
-      const totalBoletos = configManager.totalBoletos;
+      const totalBoletos = this._obtenerTotalBoletosConfig();
       
       const boletosInvalidos = numeros.filter(num => {
         const n = Number(num);
@@ -91,28 +266,38 @@ class BoletoService {
       // Query optimizada: busca solo los boletos solicitados
       const boletos = await db('boletos_estado')
         .whereIn('numero', numeros)
-        .select('numero', 'estado');
+        .select('numero', 'estado', 'numero_orden');
 
       // Separar disponibles y conflictos
       const disponibles = [];
       const conflictos = [];
-      const boletosEncontrados = new Set(boletos.map(b => b.numero));
+      const boletosPorNumero = new Map(
+        boletos.map((boleto) => [Number(boleto.numero), {
+          estado: boleto.estado,
+          numeroOrden: boleto.numero_orden ?? null
+        }])
+      );
 
-      numeros.forEach(num => {
-        const boleto = boletos.find(b => b.numero === num);
+      numeros.forEach((num) => {
+        const numeroNormalizado = Number(num);
+        const boleto = boletosPorNumero.get(numeroNormalizado);
+        const estado = boleto?.estado;
+        const numeroOrden = boleto?.numeroOrden ?? null;
         
-        if (!boleto) {
+        if (estado === undefined) {
           // No existe = disponible (se creará)
-          disponibles.push(num);
-        } else if (boleto.estado === 'disponible') {
+          disponibles.push(numeroNormalizado);
+        } else if (estado === 'disponible' && numeroOrden === null) {
           // SOLO estado 'disponible' puede comprarse
-          disponibles.push(num);
+          disponibles.push(numeroNormalizado);
         } else {
           // CUALQUIER otro estado (apartado, vendido, cancelado) = conflicto
           conflictos.push({
-            numero: num,
-            estado: boleto.estado,
-            razon: boleto.estado === 'vendido' ? 'Ya fue pagado y vendido' : `Estado: ${boleto.estado}`
+            numero: numeroNormalizado,
+            estado,
+            razon: estado === 'vendido'
+              ? 'Ya fue pagado y vendido'
+              : (numeroOrden !== null ? 'Ya está asignado a otra orden' : `Estado: ${estado}`)
           });
         }
       });

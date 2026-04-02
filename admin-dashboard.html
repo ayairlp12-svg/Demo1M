@@ -3870,7 +3870,6 @@
                 // ⭐ IMPORTANTE: Hacer requests SECUENCIALMENTE para respetar límite de conexiones de Supabase
                 console.log('Cargando estadísticas...');
                 await cargarEstadisticas();
-                
                 // Esperar antes del siguiente request (evitar saturar conexiones)
                 await new Promise(resolve => setTimeout(resolve, 300));
                 

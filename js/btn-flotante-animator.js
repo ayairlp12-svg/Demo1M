@@ -23,6 +23,27 @@
         vibrate: null
     };
 
+    function reduceMotionActiva() {
+        return typeof window.matchMedia === 'function'
+            && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+
+    function esDispositivoTactilPrincipal() {
+        return typeof window.matchMedia === 'function'
+            && window.matchMedia('(pointer: coarse)').matches;
+    }
+
+    function ahorroDatosActivo() {
+        return !!(navigator.connection && navigator.connection.saveData);
+    }
+
+    function debeAnimar() {
+        return !reduceMotionActiva()
+            && !esDispositivoTactilPrincipal()
+            && !ahorroDatosActivo()
+            && !document.hidden;
+    }
+
     /**
      * Remover todas las clases de animación
      * @param {HTMLElement} button - Elemento del botón
@@ -90,6 +111,12 @@
             return;
         }
 
+        if (!debeAnimar()) {
+            removeAnimationClasses(button);
+            console.log('ℹ️ [Animator] Animaciones omitidas por contexto de rendimiento o accesibilidad');
+            return;
+        }
+
         console.log('🎬 [Animator] Iniciando animaciones periódicas del botón flotante');
 
         // Latido periódico
@@ -132,6 +159,17 @@
         // Reanudar animaciones cuando se cierra un modal
         document.addEventListener('closeModal', () => {
             setTimeout(startAnimations, 500);
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopAnimations();
+                return;
+            }
+
+            if (!animationTimeouts.heartbeat) {
+                startAnimations();
+            }
         });
 
         // Escuchar cambios en visibilidad del botón (por CSS)

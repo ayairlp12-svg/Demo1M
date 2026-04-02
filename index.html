@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://127.0.0.1:* http://localhost:* https://gorgeous-heliotrope-5a6b8e.netlify.app http://localhost:5001 https://sadev-rifapiloto-production.up.railway.app; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://fonts.googleapis.com http://localhost:5001 http://127.0.0.1:5001 https://sadev-rifapiloto-production.up.railway.app; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' http://127.0.0.1:* http://localhost:* https: http://localhost:5001 http://127.0.0.1:5001 https://gorgeous-heliotrope-5a6b8e.netlify.app https://sadev-rifapiloto-production.up.railway.app ws: wss: ws://localhost:5001 wss://localhost:5001 ws://127.0.0.1:5001 wss://127.0.0.1:5001 wss://sadev-rifapiloto-production.up.railway.app ws://sadev-rifapiloto-production.up.railway.app; img-src 'self' data: https:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://127.0.0.1:* http://localhost:* http://localhost:5001; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://fonts.googleapis.com http://localhost:5001 http://127.0.0.1:5001; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' http://127.0.0.1:* http://localhost:* https: http://localhost:5001 http://127.0.0.1:5001 ws: wss: ws://localhost:5001 wss://localhost:5001 ws://127.0.0.1:5001 wss://127.0.0.1:5001; img-src 'self' data: https:;">
     <!-- METADATOS DINÁMICOS - Se cargan en tiempo real desde /api/og-metadata y config.js -->
     <title>Sorteos - Participa en nuestro sorteo</title>
     <meta name="description" content="Participa en nuestro sorteo 100% transparente con múltiples oportunidades de ganar.">
@@ -37,10 +37,8 @@
     <script src="js/config.js"></script>
     <script src="js/config-sync.js"></script>
     <script src="js/meta-inyector.js"></script>
-    <!-- ⚙️ Detectar entorno (debe ser PRIMERO, antes de socket-handler.js) -->
+    <!-- ⚙️ Detectar entorno -->
     <script src="js/environment-config.js"></script>
-    <!-- 🔌 Socket.io para actualizaciones en tiempo real (carga dinámicamente desde el backend) -->
-    <script src="js/socket-handler.js"></script>
     <!-- 🔄 SINCRONIZACIÓN EN VIVO: Cambios desde panel admin → Frontend -->
     <script src="js/sorteo-sync.js"></script>
     <!-- ✅ Carga inteligente de boletos para 1M boletos -->
@@ -115,21 +113,40 @@
             }
         }
     </script>
-    <script src="js/ganadores.js?v=20251228.15"></script>
-    <script src="js/sistema-premios.js?v=20260120"></script>
-    <script src="js/modal-sorteo-finalizado.js?v=20251228.15"></script>
-    <script src="js/main.js?v=20251228.15"></script>
-    <script src="js/calculo-precios.js?v=20251230.1"></script>
+    <script defer src="js/ganadores.js?v=20251228.15"></script>
+    <script defer src="js/sistema-premios.js?v=20260120"></script>
+    <script defer src="js/modal-sorteo-finalizado.js?v=20251228.15"></script>
+    <script defer src="js/main.js?v=20251228.15"></script>
+    <script defer src="js/calculo-precios.js?v=20251230.1"></script>
 
     <script defer src="js/oportunidades-manager.js"></script>
-    <script src="js/storage-manager-v2.js"></script>
-    <script src="js/carrito-global.js?v=20260218"></script>
+    <script defer src="js/storage-manager-v2.js"></script>
+    <script defer src="js/carrito-global.js?v=20260218"></script>
     <script defer src="js/carrito-oportunidades.js"></script>
-    <script src="js/flujo-compra.js?v=20260329.3"></script>
-    <script src="js/modal-conflicto-boletos.js?v=20260127"></script>
-    <script src="js/orden-formal.js?v=20260329.1"></script>
-    <script src="js/modal-contacto.js?v=20260329.2"></script>
-    <script src="js/btn-flotante-animator.js"></script>
+    <script defer src="js/flujo-compra.js?v=20260329.3"></script>
+    <script defer src="js/modal-conflicto-boletos.js?v=20260127"></script>
+    <script defer src="js/orden-formal.js?v=20260329.1"></script>
+    <script defer src="js/modal-contacto.js?v=20260329.2"></script>
+    <script>
+        (function cargarAnimadorBotonFlotanteEnSegundoPlano() {
+            function loadAnimator() {
+                if (document.querySelector('script[data-rifaplus-animator]')) return;
+                const script = document.createElement('script');
+                script.src = 'js/btn-flotante-animator.js';
+                script.defer = true;
+                script.dataset.rifaplusAnimator = 'true';
+                document.head.appendChild(script);
+            }
+
+            const idle = window.requestIdleCallback || function(cb) {
+                return setTimeout(cb, 1200);
+            };
+
+            window.addEventListener('load', function() {
+                idle(loadAnimator, { timeout: 2000 });
+            }, { once: true });
+        })();
+    </script>
 </head>
 <body>
     <!-- HEADER CON MENÚ -->
@@ -268,7 +285,7 @@
     </section>
 
     <!-- SECCIÓN DE PREMIOS DEL SORTEO -->
-    <section class="sistema-premios-section" id="sistema-premios">
+    <section class="sistema-premios-section perf-defer-mobile perf-defer-mobile--large" id="sistema-premios">
         <div class="container">
             <div class="premios-header">
                 <h2 class="premios-titulo">Sistema de Premios</h2>
@@ -304,7 +321,7 @@
     </section>
 
     <!-- INFORMACIÓN DEL SORTEO -->
-    <section class="rifa-descripcion-formal">
+    <section class="rifa-descripcion-formal perf-defer-mobile perf-defer-mobile--large">
         <div class="container">
             <div class="descripcion-content">
                 <div class="descripcion-header">
@@ -712,7 +729,7 @@
     </script>
 
     <!-- PRECIOS Y PROMOCIONES -->
-    <section class="precios-section">
+    <section class="precios-section perf-defer-mobile perf-defer-mobile--large">
         <div class="container">
             <h2 class="section-title">Precios y Promociones</h2>
             
@@ -1365,7 +1382,7 @@
     </script>
 
     <!-- BONOS SECTION -->
-    <section class="bonos-section" id="bonosSection" style="display: none;">
+    <section class="bonos-section perf-defer-mobile perf-defer-mobile--compact" id="bonosSection" style="display: none;">
         <div class="container">
             <div class="bonos-header">
                 <span class="bonos-eyebrow">Bonos Vigentes</span>
@@ -1746,6 +1763,21 @@
         bonosSection.style.display = 'block';
         bonosGrid.innerHTML = '';
 
+        const esBonoRedesDiezMil = (bono) => {
+            const texto = `${bono?.titulo || ''} ${bono?.descripcion || ''}`
+                .toLowerCase()
+                .replace(/\s+/g, ' ');
+
+            const textoCompacto = texto.replace(/[^\d]/g, '');
+
+            return (
+                texto.includes('10,000') ||
+                texto.includes('$10,000') ||
+                texto.includes('10000') ||
+                textoCompacto.includes('10000')
+            );
+        };
+
         // Renderizar cada bono
         if (config.items && Array.isArray(config.items)) {
             console.log('✅ Renderizando bonos:', config.items.length);
@@ -1785,7 +1817,7 @@
                     }
                 }
 
-                if ((colorMap[bono.color] || 'bono-primary') === 'bono-primary') {
+                if (esBonoRedesDiezMil(bono)) {
                     contenido += `
                         <div class="bono-accion">
                             <a href="#contacto" class="bono-btn-redes">
@@ -1873,7 +1905,7 @@
     </script>
 
     <!-- POR QUÉ CONFIAR EN NOSOTROS -->
-    <section class="por-que-confiar-section">
+    <section class="por-que-confiar-section perf-defer-mobile perf-defer-mobile--large">
         <div class="container">
             <h2 class="confianza-titulo">¿Por Qué Hacer Tu Plataforma De Sorteos Con SaDev?</h2>
             
@@ -2098,7 +2130,7 @@
             }
         }
     </style>
-    <section class="seccion-ganadores" id="seccionGanadores" style="display: none;">
+    <section class="seccion-ganadores perf-defer-mobile perf-defer-mobile--large" id="seccionGanadores" style="display: none;">
         <div class="container">
             <h2 class="section-title">Ganadores Registrados</h2>
             <div class="ganadores-contenedor" id="ganadoresContenedor">
@@ -2503,7 +2535,7 @@
     </script>
 
     <!-- CONTACTO -->
-    <section class="contacto-section" id="contacto">
+    <section class="contacto-section perf-defer-mobile perf-defer-mobile--compact" id="contacto">
         <div class="container">
             <h2 class="section-title">Síguenos en nuestras redes sociales y únete a nuestro canal de WhatsApp</h2>
             <div class="contacto-grid" id="contactoGrid">

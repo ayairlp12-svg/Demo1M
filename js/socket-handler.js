@@ -278,11 +278,22 @@ class SocketHandler {
     }
 }
 
+function paginaPermiteSocket() {
+    const body = document.body;
+    if (!body) return false;
+    return body.dataset.rifaplusSocket === 'true';
+}
+
 // ✅ Instancia global
 window.rifaplusSocketHandler = new SocketHandler();
 
 // 🔌 Inicializar WebSocket cuando el DOM esté listo
 document.addEventListener('DOMContentLoaded', async () => {
+    if (!paginaPermiteSocket()) {
+        console.log('ℹ️ [Socket] Socket omitido en esta página');
+        return;
+    }
+
     console.log('📄 [Socket] DOM listo, iniciando WebSocket...');
     
     // Esperar un poco a que se carguen las dependencias
@@ -300,7 +311,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Mantener conexión viva con heartbeat
 setInterval(() => {
-    if (window.rifaplusSocketHandler && window.rifaplusSocketHandler.socket) {
+    if (paginaPermiteSocket() && window.rifaplusSocketHandler && window.rifaplusSocketHandler.socket) {
         window.rifaplusSocketHandler.socket.emit('ping');
     }
 }, 30000); // Cada 30 segundos

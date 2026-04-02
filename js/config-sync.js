@@ -19,6 +19,90 @@ window.rifaplusConfig._sincronizandoBackend = false;
 window.rifaplusConfig._ultimaSincronizacion = 0;
 window.rifaplusConfig._reintentosFallidos = 0;  // Contador para backoff exponencial
 window.rifaplusConfig._maxReintentos = 3;        // Máximo de reintentos
+window.rifaplusConfig._configPublicaCache = null;
+window.rifaplusConfig._configPublicaCacheTime = 0;
+window.rifaplusConfig._configPublicaPromise = null;
+window.rifaplusConfig._intervaloEstadoId = null;
+window.rifaplusConfig._intervaloConfigId = null;
+
+window.rifaplusConfig.debeSincronizarEstadoAutomaticamente = function() {
+    const body = document.body;
+    if (!body) return false;
+    return body.dataset.rifaplusLiveState === 'true';
+};
+
+window.rifaplusConfig.debePrecargarRangoPublico = function() {
+    const body = document.body;
+    if (!body) return false;
+    return body.dataset.rifaplusWarmRange === 'true';
+};
+
+window.rifaplusConfig.obtenerConfigPublicaCompartida = async function(opciones = {}) {
+    const force = opciones?.force === true;
+    const maxAgeMs = Number.isFinite(Number(opciones?.maxAgeMs)) ? Number(opciones.maxAgeMs) : 30000;
+    const ahora = Date.now();
+
+    if (!force && this._configPublicaCache && (ahora - this._configPublicaCacheTime) < maxAgeMs) {
+        return this._configPublicaCache;
+    }
+
+    if (!force && this._configPublicaPromise) {
+        return this._configPublicaPromise;
+    }
+
+    const apiBase = this.backend?.apiBase
+        || this.obtenerApiBase?.()
+        || window.location.origin;
+
+    this._configPublicaPromise = fetch(`${apiBase}/api/public/config`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+    })
+        .then(async (response) => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (!result?.success || !result?.data) {
+                throw new Error(result?.message || 'Configuración pública inválida');
+            }
+
+            const data = result.data;
+            this._configPublicaCache = data;
+            this._configPublicaCacheTime = Date.now();
+
+            if (data.rifa && typeof data.rifa === 'object') {
+                Object.assign(this.rifa, data.rifa);
+            }
+
+            if (Array.isArray(data.cuentas)) {
+                this.tecnica.bankAccounts = data.cuentas;
+            }
+
+            if (Number.isFinite(Number(data.totalBoletos)) && Number(data.totalBoletos) > 0) {
+                this.rifa.totalBoletos = Number(data.totalBoletos);
+            }
+
+            if (Number.isFinite(Number(data.precioBoleto)) && Number(data.precioBoleto) >= 0) {
+                this.rifa.precioBoleto = Number(data.precioBoleto);
+            }
+
+            return data;
+        })
+        .catch((error) => {
+            if (this._configPublicaCache) {
+                console.debug('ℹ️ Usando caché local de configuración pública tras fallo:', error.message);
+                return this._configPublicaCache;
+            }
+            throw error;
+        })
+        .finally(() => {
+            this._configPublicaPromise = null;
+        });
+
+    return this._configPublicaPromise;
+};
 
 /**
  * Sincroniza la configuración del cliente desde el backend
@@ -291,6 +375,10 @@ window.rifaplusConfig.sincronizarEstadoBackend = async function() {
  * Helper: Carga datos completos en background sin bloquear UI
  */
 window.rifaplusConfig._cargarDatosCompletosEnBackground = async function() {
+    if (!this.debePrecargarRangoPublico()) {
+        return false;
+    }
+
     try {
         const totalBoletos = typeof this.obtenerTotalBoletos === 'function'
             ? this.obtenerTotalBoletos()
@@ -318,9 +406,12 @@ window.rifaplusConfig._cargarDatosCompletosEnBackground = async function() {
                 console.debug(`✅ Datos de rango cargados en background (${inicio}-${fin})`);
             }
         }
+        return true;
     } catch (error) {
         console.debug('ℹ️  Error cargando rango en background (no crítico):', error.message);
     }
+
+    return false;
 };
 
 /**
@@ -328,15 +419,27 @@ window.rifaplusConfig._cargarDatosCompletosEnBackground = async function() {
  * Intervalo de 5 minutos para evitar 429 Too Many Requests
  */
 window.rifaplusConfig.iniciarActualizacionesAutomaticas = function() {
-    // Sincronizar estado cada 5 minutos
-    setInterval(() => {
-        this.sincronizarEstadoBackend();
-    }, 300000); // 5 minutos
-    
-    // Sincronizar configuración cada 5 minutos (para cambios desde admin)
-    setInterval(() => {
-        this.sincronizarConfigDelBackend();
-    }, 300000); // 5 minutos
+    if (!this._intervaloEstadoId) {
+        this._intervaloEstadoId = setInterval(() => {
+            if (document.visibilityState !== 'visible') {
+                return;
+            }
+
+            if (this.debeSincronizarEstadoAutomaticamente()) {
+                this.sincronizarEstadoBackend();
+            }
+        }, 300000); // 5 minutos
+    }
+
+    if (!this._intervaloConfigId) {
+        this._intervaloConfigId = setInterval(() => {
+            if (document.visibilityState !== 'visible') {
+                return;
+            }
+
+            this.sincronizarConfigDelBackend();
+        }, 300000); // 5 minutos
+    }
 };
 
 /**

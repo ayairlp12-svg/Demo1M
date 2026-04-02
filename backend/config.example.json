@@ -122,6 +122,9 @@
     "maquinaSuerte": {
       "limiteBoletos": 10
     },
+    "busquedaBoletos": {
+      "modoAvanzado": true
+    },
     "ayuda": {
       "preguntasFrecuentes": [
         {

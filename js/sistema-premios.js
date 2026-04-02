@@ -66,25 +66,13 @@ function inicializarSistemaPremios() {
  */
 async function cargarPremiosDelServidor() {
     try {
-        // Obtener API_BASE desde config
-        const API_BASE = (window.rifaplusConfig && window.rifaplusConfig.backend) 
-            ? window.rifaplusConfig.backend.apiBase 
-            : (window.rifaplusConfig?.obtenerApiBase?.() || window.location.origin);
-        
-        const response = await fetch(`${API_BASE}/api/public/config`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-        });
+        const result = typeof window.rifaplusConfig?.obtenerConfigPublicaCompartida === 'function'
+            ? await window.rifaplusConfig.obtenerConfigPublicaCompartida()
+            : null;
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (result.success && result.data.sistemaPremios) {
+        if (result?.sistemaPremios) {
             console.log('[Premios] ✅ Cargado desde servidor');
-            return result.data.sistemaPremios;
+            return result.sistemaPremios;
         }
 
         return null;

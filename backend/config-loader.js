@@ -1,10 +1,11 @@
 /**
- * Config Loader - Carga configuración de js/config.js hacia Node.js
+ * Config Loader - Carga configuración base/legacy hacia Node.js
  * 
- * Permite que el backend lea la misma configuración del cliente (config.js)
+ * Se usa como fallback de arranque cuando la configuración dinámica aún no está disponible.
  * Prioridad:
  * 1. Variables de entorno (.env)
- * 2. Archivo config.js 
+ * 2. Archivo config.json local
+ * 3. Archivo config.js legacy
  * 3. Valores por defecto
  */
 
@@ -12,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * Carga la configuración extrayendo la sección 'rifa' de config.js
+ * Carga configuración legacy extrayendo la sección 'rifa' de config.js
  * Usa regex para evitar ejecutar todo el código
  */
 function cargarConfigJavaScript() {
@@ -66,14 +67,14 @@ function cargarConfigJavaScript() {
 
 /**
  * Obtiene la configuración de expiración de órdenes y PRECIO
- * Prioridad: .env > config.json (saved) > config.js (defaults) > fallbacks
+ * Prioridad: .env > config.json local > config.js legacy > fallbacks
  * 
- * ✅ CRÍTICO: Primero intenta leer desde config.json donde se guardan los cambios del admin
+ * ⚠️ NOTA: esto NO es la fuente principal de verdad cuando la BD está disponible.
  */
 function obtenerConfigExpiracion() {
     let configGuardado = {};
     
-    // 🔥 PASO 1: Intentar leer desde config.json (donde se guardan cambios del admin)
+    // 🔥 PASO 1: Intentar leer desde config.json local como fallback de arranque
     try {
         const configJsonPath = path.join(__dirname, 'config.json');
         if (fs.existsSync(configJsonPath)) {
@@ -81,14 +82,14 @@ function obtenerConfigExpiracion() {
             const parsed = JSON.parse(configData);
             if (parsed?.rifa) {
                 configGuardado = parsed.rifa;
-                console.log('✅ [Config-Loader] Configuración cargada desde config.json (SAVED)');
+                console.log('✅ [Config-Loader] Configuración base cargada desde config.json');
             }
         }
     } catch (err) {
         console.warn('⚠️  No se pudo leer config.json:', err.message);
     }
     
-    // 🔥 PASO 2: Fallback a config.js para valores faltantes
+    // 🔥 PASO 2: Fallback a config.js legacy para valores faltantes
     const configDefault = cargarConfigJavaScript();
     
     return {
@@ -110,13 +111,13 @@ function obtenerConfigExpiracion() {
             || configDefault.maxBoletosApartadosSinPago 
             || null,
         
-        // ✅ CRÍTICO: Precio primero desde config.json (saved), después config.js
+        // Precio de respaldo para arranque/fallback
         precioBoleto: parseInt(process.env.PRECIO_BOLETO) 
             || configGuardado.precioBoleto
             || configDefault.precioBoleto 
             || 15,
         
-        // ✅ CRÍTICO: Total boletos primero desde config.json (saved), después config.js
+        // Total de boletos de respaldo para arranque/fallback
         totalBoletos: parseInt(process.env.TOTAL_BOLETOS)
             || configGuardado.totalBoletos
             || configDefault.totalBoletos

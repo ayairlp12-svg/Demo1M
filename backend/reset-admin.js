@@ -58,7 +58,7 @@ async function resetearAdmin() {
       resultado = await db('admin_users')
         .where('username', defaultUsername)
         .update({
-          password: hashedPassword,
+          password_hash: hashedPassword,
           updated_at: new Date()
         });
       console.log(`✅ Usuario ${defaultUsername} actualizado\n`);
@@ -67,7 +67,7 @@ async function resetearAdmin() {
       console.log('➕ Usuario no encontrado, creando...');
       resultado = await db('admin_users').insert({
         username: defaultUsername,
-        password: hashedPassword,
+        password_hash: hashedPassword,
         email: 'admin@rifaplus.local',
         rol: 'admin',
         activo: true,

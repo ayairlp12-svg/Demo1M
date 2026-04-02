@@ -60,9 +60,9 @@
       "fechaFin": null
     },
     "descuentoPorcentaje": {
-      "enabled": false,
+      "enabled": true,
       "porcentaje": 100,
-      "fechaInicio": "2026-03-29T14:35",
+      "fechaInicio": "2026-03-31T19:03",
       "fechaFin": "2026-03-31T22:00"
     },
     "bonos": {
@@ -91,9 +91,9 @@
       "presorteo": [],
       "ruletazos": []
     },
-    "fechaSorteo": "2026-03-31T23:45:00",
-    "fechaSorteoFormato": "31 de Marzo del 2026",
-    "horaSorteo": "23:45",
+    "fechaSorteo": "2026-04-30T12:00:00",
+    "fechaSorteoFormato": "30 de Abril del 2026",
+    "horaSorteo": "12:00",
     "zonaHoraria": "Hora Centro México",
     "modalidadSorteo": "Transmisión en Vivo por Facebook",
     "fechaPresorteo": null,
@@ -146,6 +146,9 @@
     },
     "maquinaSuerte": {
       "limiteBoletos": 10
+    },
+    "busquedaBoletos": {
+      "modoAvanzado": true
     },
     "ayuda": {
       "preguntasFrecuentes": [

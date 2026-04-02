@@ -24,6 +24,9 @@
     "dev:frontend": "npm run build -- --watch",
     "prod": "NODE_ENV=production node backend/server.js",
     "health-check": "node scripts/health-check.js",
+    "validate": "node -r dotenv/config backend/validate-db.js",
+    "audit:bd": "node -r dotenv/config backend/audit-bd-supabase.js",
+    "apply:index": "node -r dotenv/config backend/apply-partial-index.js",
     "migration:create": "knex migrate:make",
     "migration:latest": "knex migrate:latest",
     "migration:rollback": "knex migrate:rollback"

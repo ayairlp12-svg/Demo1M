@@ -3,7 +3,7 @@
 // v2.0: Migrado a PostgreSQL con Knex para persistencia segura
 // v2.1: Autenticación JWT para panel admin
 // v2.2: Validaciones, seguridad, sanitización y rate limiting
-// v2.3: Sistema automático de expiración de órdenes (configurable desde config.js)
+// v2.3: Sistema automático de expiración de órdenes (configurable dinámicamente)
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -30,7 +30,7 @@ const OportunidadesOrdenService = require('./services/oportunidadesOrdenService'
 const BoletoService = require('./services/boletoService'); // Servicio de boletos para estadísticas y limpieza
 const comprobanteService = require('./services/comprobanteService'); // ✅ Servicio de comprobantes
 const { inicializarEventosWebSocket } = require('./services/websocket-events'); // 🔌 Eventos de WebSocket
-const { obtenerConfigExpiracion } = require('./config-loader'); // Carga config.js
+const { obtenerConfigExpiracion } = require('./config-loader'); // Fallback/base de arranque
 const dbUtils = require('./db-utils');
 const { calcularDescuentoCompartido, auditarConsistenciaPrecios, calcularTotalesServidor } = require('./calculo-precios-server'); // ✅ Cálculo sincronizado
 
@@ -93,40 +93,35 @@ async function pLimit(promises, maxConcurrent = 3) {
 // FUNCIÓN: OBTENER PRECIO DINAMICO (Lee en cada petición)
 // ============================================================
 /**
- * Obtiene el precio del boleto dinámicamente desde config.json
+ * Obtiene el precio del boleto dinámicamente desde la configuración actual
  * ✅ ACTUALIZADO: Verifica promoción por tiempo
  * IMPORTANTE: Se ejecuta en cada petición, no usa cache para mantener sincronía
- * @returns {number} Precio del boleto desde config.json (o precio provisional si hay promoción activa)
+ * @returns {number} Precio del boleto actual (o precio provisional si hay promoción activa)
  */
 function obtenerPrecioDinamico() {
     try {
-        const configPath = path.join(__dirname, 'config.json');
-        if (fs.existsSync(configPath)) {
-            const configData = fs.readFileSync(configPath, 'utf8');
-            const config = JSON.parse(configData);
+        const config = obtenerConfigActual();
+        const ahora = new Date();
+        
+        // Verificar si hay promoción por tiempo activa
+        const promo = config.rifa?.promocionPorTiempo;
+        if (promo && promo.enabled && promo.precioProvisional !== null && promo.precioProvisional !== undefined) {
+            const inicio = promo.fechaInicio ? new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(String(promo.fechaInicio)) ? promo.fechaInicio : `${promo.fechaInicio}-06:00`) : null;
+            const fin = promo.fechaFin ? new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(String(promo.fechaFin)) ? promo.fechaFin : `${promo.fechaFin}-06:00`) : null;
             
-            const ahora = new Date();
-            
-            // Verificar si hay promoción por tiempo activa
-            const promo = config.rifa?.promocionPorTiempo;
-            if (promo && promo.enabled && promo.precioProvisional !== null && promo.precioProvisional !== undefined) {
-                const inicio = promo.fechaInicio ? new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(String(promo.fechaInicio)) ? promo.fechaInicio : `${promo.fechaInicio}-06:00`) : null;
-                const fin = promo.fechaFin ? new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(String(promo.fechaFin)) ? promo.fechaFin : `${promo.fechaFin}-06:00`) : null;
-                
-                // Si estamos dentro del rango de promoción, usar precio provisional
-                if (inicio && fin && ahora >= inicio && ahora <= fin) {
-                    const precioProvisional = Number(promo.precioProvisional);
-                    if (precioProvisional >= 0 && Number.isFinite(precioProvisional)) {
-                        console.log(`💰 [Promoción Activa] Usando precio provisional: $${precioProvisional.toFixed(2)}`);
-                        return precioProvisional;
-                    }
+            // Si estamos dentro del rango de promoción, usar precio provisional
+            if (inicio && fin && ahora >= inicio && ahora <= fin) {
+                const precioProvisional = Number(promo.precioProvisional);
+                if (precioProvisional >= 0 && Number.isFinite(precioProvisional)) {
+                    console.log(`💰 [Promoción Activa] Usando precio provisional: $${precioProvisional.toFixed(2)}`);
+                    return precioProvisional;
                 }
             }
-            
-            // Si no hay promoción activa, usar precio normal
-            if (config?.rifa?.precioBoleto && config.rifa.precioBoleto > 0) {
-                return config.rifa.precioBoleto;  // ✅ Lee el valor ACTUAL de config.json
-            }
+        }
+        
+        // Si no hay promoción activa, usar precio normal
+        if (config?.rifa?.precioBoleto !== undefined && Number(config.rifa.precioBoleto) >= 0) {
+            return Number(config.rifa.precioBoleto);
         }
     } catch (err) {
         console.error('Error leyendo precio dinámico:', err.message);
@@ -136,25 +131,36 @@ function obtenerPrecioDinamico() {
     return 15;
 }
 
-// Configuración de expiración de órdenes
-// Prioridad: .env > config.js > defaults
+// Configuración base de arranque para expiración de órdenes
+// La configuración dinámica principal viene de la BD cuando está disponible.
 const configExpiracion = obtenerConfigExpiracion();
 const TIEMPO_APARTADO_HORAS = configExpiracion.tiempoApartadoHoras;
 const INTERVALO_LIMPIEZA_MINUTOS = configExpiracion.intervaloLimpiezaMinutos;
-const PRECIO_BOLETO_DEFAULT = configExpiracion.precioBoleto; // ✅ PRECIO DINÁMICO desde config.js
+const PRECIO_BOLETO_DEFAULT = configExpiracion.precioBoleto;
 
 // ⭐ CACHE GLOBAL EN SERVIDOR (en lugar de window.* que no existe en Node.js)
 const serverCache = {
     boletosPublicosCached: null,
     boletosPublicosCachedTime: 0,
-    boletosPublicosByRange: new Map()
+    boletosPublicosByRange: new Map(),
+    publicConfigCached: null,
+    publicConfigCachedTime: 0,
+    clienteConfigCached: null,
+    clienteConfigCachedTime: 0
 };
+
+function limpiarCacheConfiguracionPublica() {
+    serverCache.publicConfigCached = null;
+    serverCache.publicConfigCachedTime = 0;
+    serverCache.clienteConfigCached = null;
+    serverCache.clienteConfigCachedTime = 0;
+}
 
 // 🔌 VARIABLE GLOBAL: Instancia de eventos WebSocket (se inicializa al arrancar el servidor)
 let wsEvents = null;
 
 // Log de configuración cargada
-console.log(`⚙️  Configuración de expiración cargada:`);
+console.log(`⚙️  Configuración base de arranque cargada:`);
 console.log(`   - Tiempo reservado: ${TIEMPO_APARTADO_HORAS} horas`);
 console.log(`   - Intervalo limpieza: ${INTERVALO_LIMPIEZA_MINUTOS} minutos`);
 console.log(`   - Precio boleto: $${PRECIO_BOLETO_DEFAULT}`);  // ✅ LOG del precio
@@ -367,32 +373,138 @@ function setHttpCacheHeaders(res, maxAgeSeconds = 60, isPublic = true) {
 // ===== CONFIGURACIÓN DINÁMICA DEL SORTEO =====
 // Usar config manager para cargar configuración en memoria (caché)
 const configManager = require('./config-manager').getInstance();
+const ConfigManagerV2 = require('./config-manager-v2'); // 🟦 NUEVO: Para persistencia en BD
+let configManagerV2 = null; // Se inicializa en setImmediate
+
+function clonarConfigSeguro(config) {
+    return JSON.parse(JSON.stringify(config || {}));
+}
+
+function sincronizarConfigLegacyEnMemoria(config) {
+    if (!config || typeof config !== 'object') return;
+
+    try {
+        configManager.config = clonarConfigSeguro(config);
+        configManager.lastLoadTime = Date.now();
+        configManager.cacheVersion = (configManager.cacheVersion || 0) + 1;
+    } catch (error) {
+        console.warn('⚠️ No se pudo sincronizar ConfigManager legacy en memoria:', error.message);
+    }
+}
+
+function obtenerConfigActual() {
+    if (configManagerV2?.getConfig) {
+        const configBD = configManagerV2.getConfig();
+        if (configBD && typeof configBD === 'object') {
+            return clonarConfigSeguro(configBD);
+        }
+    }
+
+    if (configManager?.getAll) {
+        const configLegacy = configManager.getAll();
+        if (configLegacy && typeof configLegacy === 'object') {
+            return clonarConfigSeguro(configLegacy);
+        }
+    }
+
+    try {
+        const configPath = path.join(__dirname, 'config.json');
+        const raw = fs.readFileSync(configPath, 'utf8');
+        return JSON.parse(raw);
+    } catch (error) {
+        console.warn('⚠️ No se pudo leer configuración actual desde disco:', error.message);
+        return {};
+    }
+}
 
 function cargarConfigSorteo() {
+    const configActual = obtenerConfigActual();
+
     return {
-        totalBoletos: configManager.totalBoletos,
-        precioBoleta: configManager.precioBoleto,
-        precioBoleto: configManager.precioBoleto,
-        clienteNombre: 'SORTEOS TORRES',
+        totalBoletos: configActual?.rifa?.totalBoletos || configManager.totalBoletos,
+        precioBoleta: configActual?.rifa?.precioBoleto || configManager.precioBoleto,
+        precioBoleto: configActual?.rifa?.precioBoleto || configManager.precioBoleto,
+        clienteNombre: configActual?.cliente?.nombre || 'SORTEOS TORRES',
         // ✅ AGREGADO: Información de cliente y prefijo
         cliente: {
-            id: configManager.config?.cliente?.id || 'Sorteos_El_Trebol',
-            nombre: configManager.config?.cliente?.nombre || 'SORTEOS TORRES',
-            prefijoOrden: configManager.config?.cliente?.prefijoOrden || 'SS'
+            id: configActual?.cliente?.id || configManager.config?.cliente?.id || 'Sorteos_El_Trebol',
+            nombre: configActual?.cliente?.nombre || configManager.config?.cliente?.nombre || 'SORTEOS TORRES',
+            prefijoOrden: configActual?.cliente?.prefijoOrden || configManager.config?.cliente?.prefijoOrden || 'SS'
         },
         // ✅ AGREGADO: Información de descuentos desde config
         rifa: {
-            precioBoleto: configManager.config?.rifa?.precioBoleto || configManager.precioBoleto,
-            descuentos: configManager.config?.rifa?.descuentos || { enabled: false, reglas: [] },
-            promocionPorTiempo: configManager.config?.rifa?.promocionPorTiempo || { enabled: false },
-            descuentoPorcentaje: configManager.config?.rifa?.descuentoPorcentaje || { enabled: false },
+            precioBoleto: configActual?.rifa?.precioBoleto || configManager.config?.rifa?.precioBoleto || configManager.precioBoleto,
+            tiempoApartadoHoras: configActual?.rifa?.tiempoApartadoHoras || configManager.config?.rifa?.tiempoApartadoHoras || TIEMPO_APARTADO_HORAS,
+            intervaloLimpiezaMinutos: configActual?.rifa?.intervaloLimpiezaMinutos || configManager.config?.rifa?.intervaloLimpiezaMinutos || INTERVALO_LIMPIEZA_MINUTOS,
+            descuentos: configActual?.rifa?.descuentos || configManager.config?.rifa?.descuentos || { enabled: false, reglas: [] },
+            promocionPorTiempo: configActual?.rifa?.promocionPorTiempo || configManager.config?.rifa?.promocionPorTiempo || { enabled: false },
+            descuentoPorcentaje: configActual?.rifa?.descuentoPorcentaje || configManager.config?.rifa?.descuentoPorcentaje || { enabled: false },
             oportunidades: {
-                enabled: configManager.config?.rifa?.oportunidades?.enabled || false,
-                multiplicador: configManager.config?.rifa?.oportunidades?.multiplicador || 3,
-                rango_visible: configManager.config?.rifa?.oportunidades?.rango_visible || false
+                enabled: configActual?.rifa?.oportunidades?.enabled || configManager.config?.rifa?.oportunidades?.enabled || false,
+                multiplicador: configActual?.rifa?.oportunidades?.multiplicador || configManager.config?.rifa?.oportunidades?.multiplicador || 3,
+                rango_visible: configActual?.rifa?.oportunidades?.rango_visible || configManager.config?.rifa?.oportunidades?.rango_visible || false
             }
         }
     };
+}
+
+function construirRangoPorPrefijo(valor, anchoBoletos, maxNumero) {
+    const prefijo = String(valor || '').trim();
+    if (!/^\d+$/.test(prefijo) || prefijo.length === 0 || prefijo.length > anchoBoletos) {
+        return null;
+    }
+
+    const multiplicador = 10 ** Math.max(0, anchoBoletos - prefijo.length);
+    const inicio = Number(prefijo) * multiplicador;
+    const fin = Math.min(maxNumero, inicio + multiplicador - 1);
+
+    if (!Number.isFinite(inicio) || !Number.isFinite(fin) || inicio > maxNumero || fin < inicio) {
+        return null;
+    }
+
+    return { inicio, fin };
+}
+
+function construirSerieSuffixQuery(valor, maxNumero) {
+    const sufijo = String(valor || '').trim();
+    if (!/^\d+$/.test(sufijo) || sufijo.length === 0) {
+        return null;
+    }
+
+    const inicio = Number(sufijo);
+    const paso = 10 ** sufijo.length;
+
+    if (!Number.isFinite(inicio) || !Number.isFinite(paso) || paso <= 0 || inicio > maxNumero) {
+        return null;
+    }
+
+    return db
+        .select(db.raw('gs::int AS numero'))
+        .from(db.raw('generate_series(?::bigint, ?::bigint, ?::bigint) AS gs', [inicio, maxNumero, paso]))
+        .as('s');
+}
+
+function construirQueryBusquedaSobreSerie(serieQuery, { availableOnly = false, limite = 100, offset = 0 } = {}) {
+    const query = db
+        .from(serieQuery)
+        .leftJoin('boletos_estado as be', function() {
+            this.on('be.numero', '=', 's.numero')
+                .andOn(db.raw("be.estado IN ('vendido', 'apartado')"));
+        })
+        .select(
+            's.numero',
+            db.raw("COALESCE(be.estado, 'disponible') AS estado")
+        )
+        .orderBy('s.numero', 'asc')
+        .limit(limite)
+        .offset(offset)
+        .timeout(15000);
+
+    if (availableOnly) {
+        query.whereNull('be.numero');
+    }
+
+    return query;
 }
 
 // Servir archivos estáticos en /public
@@ -561,7 +673,7 @@ function validarCampoPremio(campo, valor) {
  * 📦 Crea backup automático de config.json
  * Guarda versión anterior en backup/
  */
-async function crearBackupConfig(configPath) {
+async function crearBackupConfig(configPath, configSnapshot = null) {
     try {
         const backupDir = path.join(path.dirname(configPath), 'backups');
         
@@ -574,9 +686,12 @@ async function crearBackupConfig(configPath) {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const backupPath = path.join(backupDir, `config.${timestamp}.json`);
         
-        // Copiar archivo actual al backup
-        if (fs.existsSync(configPath)) {
-            const contenido = fs.readFileSync(configPath, 'utf8');
+        const contenido = configSnapshot
+            ? JSON.stringify(configSnapshot, null, 2)
+            : (fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf8') : null);
+
+        // Copiar snapshot actual al backup
+        if (contenido) {
             fs.writeFileSync(backupPath, contenido, 'utf8');
             
             // Limpiar backups viejos (mantener últimos 10)
@@ -643,21 +758,40 @@ function log(level = 'info', mensaje = '', datos = {}) {
     }
 }
 
+function clasificarDuracion(ms, umbrales = {}) {
+    const slowMs = Number(umbrales.slowMs) || 800;
+    const warnMs = Number(umbrales.warnMs) || 2000;
+
+    if (ms >= warnMs) return 'error';
+    if (ms >= slowMs) return 'warn';
+    return 'info';
+}
+
+function logOperacionHttp(nombre, inicioMs, datos = {}, umbrales = {}) {
+    const duracionMs = Math.max(0, Date.now() - inicioMs);
+    const level = clasificarDuracion(duracionMs, umbrales);
+    log(level, `${nombre} completado`, {
+        duracionMs,
+        ...datos
+    });
+    return duracionMs;
+}
+
 /**
  * FUNCIÓN CRÍTICA: Calcula descuento basado en cantidad de boletos y promociones
  * Esta función se ejecuta en BACKEND para garantizar consistencia
- * Usa promociones DINÁMICAS de config.js si está disponible, con fallback a hardcodeadas
+ * Usa promociones dinámicas de la configuración actual, con fallback seguro
  * @param {number} cantidad - Número de boletos
  * @param {number} precioUnitario - Precio por boleto (obtiene dinámicamente si no se proporciona)
  * @returns {number} Monto de descuento en pesos
  */
 /**
  * ✅ NUEVA FUNCIÓN: Calcula descuento de forma SINCRONIZADA con cliente
- * Usa calcularDescuentoCompartido() que implementa la MISMA lógica que config.js
+ * Usa calcularDescuentoCompartido() con la misma lógica compartida entre cliente y servidor
  * Esto evita inconsistencias como el bug ST-AA074 (24k vs 25k)
  */
 function calcularDescuentoBackend(cantidad, precioUnitario, config = null) {
-    // Si no se proporciona precio, obtener dinámicamente desde config.json
+    // Si no se proporciona precio, obtenerlo desde la configuración actual
     if (!precioUnitario) {
         precioUnitario = obtenerPrecioDinamico() || 15;
     }
@@ -860,13 +994,73 @@ function normalizarSeoConfigParaPersistencia(seo = {}, configActual = {}) {
     const cliente = configActual.cliente || {};
     const rifa = configActual.rifa || {};
     const seoActual = configActual.seo || {};
+    const tieneCampo = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
+    const leerCampo = (obj, keys = []) => {
+        for (const key of keys) {
+            if (tieneCampo(obj, key)) {
+                return obj[key];
+            }
+        }
+        return undefined;
+    };
+    const limpiarSeo = (valor) => (typeof valor === 'string' ? valor.trim() : valor);
 
-    const titulo = seo.title || seo.titulo || seo.openGraph?.titulo || seo.twitter?.titulo || seoActual.title || seoActual.titulo || (rifa.nombreSorteo ? `${rifa.nombreSorteo}${cliente.nombre ? ` | ${cliente.nombre}` : ''}` : (cliente.nombre || 'Sorteos'));
-    const descripcion = seo.description || seo.descripcion || seo.openGraph?.descripcion || seo.twitter?.descripcion || seoActual.description || seoActual.descripcion || rifa.descripcion || cliente.eslogan || (rifa.nombreSorteo ? `Participa en el sorteo de ${rifa.nombreSorteo}.` : 'Compra tus boletos en linea.');
-    const imagen = seo.image || seo.imagen || seo.openGraph?.imagen || seo.twitter?.imagen || seoActual.image || seoActual.imagen || cliente.imagenPrincipal || cliente.logo || cliente.logotipo || '/images/ImgPrincipal.png';
-    const palabrasLlave = seo.keywords || seo.palabrasLlave || seoActual.keywords || seoActual.palabrasLlave || `sorteo, rifa, ${rifa.nombreSorteo || ''}, ${cliente.nombre || 'Sorteos'}`.replace(/,\s*,/g, ',').trim();
-    const urlBase = seo.urlBase || seoActual.urlBase || '';
-    const autor = seo.author || seo.autor || seoActual.author || seoActual.autor || cliente.nombre || 'Sorteos';
+    const tituloDerivado = rifa.nombreSorteo ? `${rifa.nombreSorteo}${cliente.nombre ? ` | ${cliente.nombre}` : ''}` : (cliente.nombre || 'Sorteos');
+    const descripcionDerivada = rifa.descripcion || cliente.eslogan || (rifa.nombreSorteo ? `Participa en el sorteo de ${rifa.nombreSorteo}.` : 'Compra tus boletos en linea.');
+    const imagenDerivada = cliente.imagenPrincipal || cliente.logo || cliente.logotipo || '/images/ImgPrincipal.png';
+    const palabrasLlaveDerivadas = `sorteo, rifa, ${rifa.nombreSorteo || ''}, ${cliente.nombre || 'Sorteos'}`.replace(/,\s*,/g, ',').trim();
+    const autorDerivado = cliente.nombre || 'Sorteos';
+
+    const titulo = limpiarSeo(leerCampo(seo, ['title', 'titulo']))
+        || limpiarSeo(leerCampo(seo.openGraph, ['titulo']))
+        || limpiarSeo(leerCampo(seo.twitter, ['titulo']))
+        || limpiarSeo(leerCampo(seoActual, ['title', 'titulo']))
+        || tituloDerivado;
+
+    const descripcion = limpiarSeo(leerCampo(seo, ['description', 'descripcion']))
+        || limpiarSeo(leerCampo(seo.openGraph, ['descripcion']))
+        || limpiarSeo(leerCampo(seo.twitter, ['descripcion']))
+        || limpiarSeo(leerCampo(seoActual, ['description', 'descripcion']))
+        || descripcionDerivada;
+
+    const imagen = limpiarSeo(leerCampo(seo, ['image', 'imagen']))
+        || limpiarSeo(leerCampo(seo.openGraph, ['imagen']))
+        || limpiarSeo(leerCampo(seo.twitter, ['imagen']))
+        || limpiarSeo(leerCampo(seoActual, ['image', 'imagen']))
+        || imagenDerivada;
+
+    const palabrasLlave = limpiarSeo(leerCampo(seo, ['keywords', 'palabrasLlave']))
+        || limpiarSeo(leerCampo(seoActual, ['keywords', 'palabrasLlave']))
+        || palabrasLlaveDerivadas;
+
+    const urlBase = limpiarSeo(leerCampo(seo, ['urlBase']))
+        || limpiarSeo(leerCampo(seoActual, ['urlBase']))
+        || '';
+
+    const autor = limpiarSeo(leerCampo(seo, ['author', 'autor']))
+        || limpiarSeo(leerCampo(seoActual, ['author', 'autor']))
+        || autorDerivado;
+
+    const ogTitulo = limpiarSeo(leerCampo(seo.openGraph, ['titulo'])) || titulo;
+    const ogDescripcion = limpiarSeo(leerCampo(seo.openGraph, ['descripcion'])) || descripcion;
+    const ogImagen = limpiarSeo(leerCampo(seo.openGraph, ['imagen'])) || imagen;
+    const ogTipo = limpiarSeo(leerCampo(seo.openGraph, ['tipo']))
+        || limpiarSeo(leerCampo(seoActual.openGraph, ['tipo']))
+        || 'website';
+    const ogLocale = limpiarSeo(leerCampo(seo.openGraph, ['locale']))
+        || limpiarSeo(leerCampo(seoActual.openGraph, ['locale']))
+        || 'es_MX';
+
+    const twitterCard = limpiarSeo(leerCampo(seo.twitter, ['card']))
+        || limpiarSeo(leerCampo(seoActual.twitter, ['card']))
+        || 'summary_large_image';
+    const twitterTitulo = limpiarSeo(leerCampo(seo.twitter, ['titulo'])) || titulo;
+    const twitterDescripcion = limpiarSeo(leerCampo(seo.twitter, ['descripcion'])) || descripcion;
+    const twitterImagen = limpiarSeo(leerCampo(seo.twitter, ['imagen'])) || imagen;
+    const twitterCreador = limpiarSeo(leerCampo(seo.twitter, ['creador']))
+        || limpiarSeo(leerCampo(seoActual.twitter, ['creador']))
+        || cliente.redesSociales?.twitter
+        || '';
 
     return {
         ...seoActual,
@@ -885,20 +1079,20 @@ function normalizarSeoConfigParaPersistencia(seo = {}, configActual = {}) {
         openGraph: {
             ...(seoActual.openGraph || {}),
             ...(seo.openGraph || {}),
-            titulo: seo.openGraph?.titulo || titulo,
-            descripcion: seo.openGraph?.descripcion || descripcion,
-            imagen: seo.openGraph?.imagen || imagen,
-            tipo: seo.openGraph?.tipo || seoActual.openGraph?.tipo || 'website',
-            locale: seo.openGraph?.locale || seoActual.openGraph?.locale || 'es_MX'
+            titulo: ogTitulo,
+            descripcion: ogDescripcion,
+            imagen: ogImagen,
+            tipo: ogTipo,
+            locale: ogLocale
         },
         twitter: {
             ...(seoActual.twitter || {}),
             ...(seo.twitter || {}),
-            card: seo.twitter?.card || seoActual.twitter?.card || 'summary_large_image',
-            titulo: seo.twitter?.titulo || titulo,
-            descripcion: seo.twitter?.descripcion || descripcion,
-            imagen: seo.twitter?.imagen || imagen,
-            creador: seo.twitter?.creador || seoActual.twitter?.creador || cliente.redesSociales?.twitter || ''
+            card: twitterCard,
+            titulo: twitterTitulo,
+            descripcion: twitterDescripcion,
+            imagen: twitterImagen,
+            creador: twitterCreador
         }
     };
 }
@@ -954,8 +1148,7 @@ function escaparHtmlAttr(valor) {
 // Sirve HTML dinámico con meta tags cuando lo solicita WhatsApp, Facebook, etc.
 app.get('/og', (req, res) => {
     try {
-        const configPath = path.join(__dirname, 'config.json');
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const config = obtenerConfigActual();
         const metadatos = construirMetadatosSeo(config, req);
 
         const metaTags = `
@@ -1001,27 +1194,17 @@ app.get('/og', (req, res) => {
 
 /**
  * GET /api/public/sorteo-info - Información pública del sorteo para Open Graph
- * Devuelve nombre, descripción y configuración del sorteo desde config.js
+ * Devuelve nombre, descripción y configuración pública del sorteo
  * Usado por Open Graph y frontend para valores dinámicos
  */
 app.get('/api/public/sorteo-info', (req, res) => {
     try {
-        // Leer config.js del frontend
-        const configPath = path.join(__dirname, '../js/config.js');
-        const configContent = fs.readFileSync(configPath, 'utf8');
-        
-        // Extraer valores usando regex
-        const clienteNombreMatch = configContent.match(/nombre:\s*"([^"]+)"/);
-        const rifaTituloMatch = configContent.match(/nombreSorteo:\s*"([^"]+)"/);
-        const rifaDescripcionMatch = configContent.match(/descripcion:\s*"([^"]+)"/);
-        const totalBoletosMatch = configContent.match(/totalBoletos:\s*(\d+)/);
-        const precioBoletaMatch = configContent.match(/precioBoleto:\s*(\d+)/);
-        
-        const clienteNombre = clienteNombreMatch ? clienteNombreMatch[1] : 'SORTEOS EL TREBOL';
-        const rifaTitulo = rifaTituloMatch ? rifaTituloMatch[1] : 'Sorteo';
-        const rifaDescripcion = rifaDescripcionMatch ? rifaDescripcionMatch[1] : 'Compra tus boletos en linea';
-        const totalBoletos = totalBoletosMatch ? parseInt(totalBoletosMatch[1]) : 1000000;
-        const precioBoleta = precioBoletaMatch ? parseInt(precioBoletaMatch[1]) : 15;
+        const configActual = obtenerConfigActual();
+        const clienteNombre = configActual.cliente?.nombre || 'SORTEOS EL TREBOL';
+        const rifaTitulo = configActual.rifa?.nombreSorteo || 'Sorteo';
+        const rifaDescripcion = configActual.rifa?.descripcion || 'Compra tus boletos en linea';
+        const totalBoletos = Number(configActual.rifa?.totalBoletos) || 1000000;
+        const precioBoleta = Number(configActual.rifa?.precioBoleto);
         
         res.json({
             cliente: clienteNombre,
@@ -1030,10 +1213,10 @@ app.get('/api/public/sorteo-info', (req, res) => {
             titulo_completo: `${clienteNombre} - Gana ${rifaTitulo}`,
             descripcion_completa: `Participa en ${clienteNombre}. ${rifaDescripcion}. Sorteo 100% transparente en vivo.`,
             totalBoletos: totalBoletos,
-            precioBoleta: precioBoleta
+            precioBoleta: Number.isFinite(precioBoleta) ? precioBoleta : 15
         });
         
-        console.log(`✅ /api/public/sorteo-info: ${clienteNombre} - ${totalBoletos} boletos @ $${precioBoleta}`);
+        console.log(`✅ /api/public/sorteo-info: ${clienteNombre} - ${totalBoletos} boletos @ $${Number.isFinite(precioBoleta) ? precioBoleta : 15}`);
     } catch (error) {
         console.error('❌ Error en /api/public/sorteo-info:', error.message);
         res.json({
@@ -1657,51 +1840,32 @@ app.delete('/api/admin/users/:id', verificarToken, async (req, res) => {
 /**
  * GET /api/public/config
  * Devuelve la configuración pública del sorteo (sin datos sensibles)
- * Lee directamente desde config.json para garantizar sincronía con cambios del admin
+ * Lee desde la configuración actual en memoria/BD y usa fallback solo si hace falta
  */
 app.get('/api/public/config', (req, res) => {
     try {
-        // Leer desde config.json para obtener valores dinámicos
-        let config = {
-            totalBoletos: null,
-            precioBoleto: null,
-            tiempoApartadoHoras: null,
-            intervaloLimpiezaMinutos: null,
-            rifa: {}
-        };
-        
-        let sistemaPremios = null;
-        let cuentasBancarias = [];
-        
-        try {
-            const configPath = path.join(__dirname, 'config.json');
-            console.log('[GET /api/public/config] Leyendo:', configPath);
-            
-            const configData = fs.readFileSync(configPath, 'utf8');
-            const jsonConfig = JSON.parse(configData);
-            
-            // Obtener valores desde config.json (dinámicos)
-            config.totalBoletos = jsonConfig.rifa?.totalBoletos;
-            config.precioBoleto = jsonConfig.rifa?.precioBoleto;
-            config.tiempoApartadoHoras = jsonConfig.rifa?.tiempoApartadoHoras;
-            config.intervaloLimpiezaMinutos = jsonConfig.rifa?.intervaloLimpiezaMinutos;
-            config.rifa = jsonConfig.rifa;
-            
-            sistemaPremios = jsonConfig.rifa?.sistemaPremios;
-            cuentasBancarias = jsonConfig.tecnica?.bankAccounts || [];
-            
-            console.log(`[GET /api/public/config] ✅ Config: ${config.totalBoletos} boletos, $${config.precioBoleto} por boleto`);
-        } catch (e) {
-            console.error('[GET /api/public/config] ❌ Error leyendo config.json:', e.message);
-            // Fallback a config.js si config.json falla
-            const fallbackConfig = obtenerConfigExpiracion();
-            config.totalBoletos = fallbackConfig.totalBoletos;
-            config.precioBoleto = fallbackConfig.precioBoleto;
-            config.tiempoApartadoHoras = fallbackConfig.tiempoApartadoHoras;
-            config.intervaloLimpiezaMinutos = fallbackConfig.intervaloLimpiezaMinutos;
+        const cacheAge = Date.now() - serverCache.publicConfigCachedTime;
+        if (serverCache.publicConfigCached && cacheAge >= 0 && cacheAge < 10000) {
+            return res.json(serverCache.publicConfigCached);
         }
 
-        res.json({
+        const configActual = obtenerConfigActual();
+        const fallbackConfig = obtenerConfigExpiracion();
+
+        const config = {
+            totalBoletos: configActual.rifa?.totalBoletos ?? fallbackConfig.totalBoletos ?? null,
+            precioBoleto: configActual.rifa?.precioBoleto ?? fallbackConfig.precioBoleto ?? null,
+            tiempoApartadoHoras: configActual.rifa?.tiempoApartadoHoras ?? fallbackConfig.tiempoApartadoHoras ?? null,
+            intervaloLimpiezaMinutos: configActual.rifa?.intervaloLimpiezaMinutos ?? fallbackConfig.intervaloLimpiezaMinutos ?? null,
+            rifa: configActual.rifa || {}
+        };
+
+        const sistemaPremios = configActual.rifa?.sistemaPremios || null;
+        const cuentasBancarias = configActual.tecnica?.bankAccounts || [];
+
+        console.log(`[GET /api/public/config] ✅ Config actual: ${config.totalBoletos} boletos, $${config.precioBoleto} por boleto`);
+
+        const payload = {
             success: true,
             data: {
                 totalBoletos: config.totalBoletos,
@@ -1713,7 +1877,12 @@ app.get('/api/public/config', (req, res) => {
                 // 🏦 Agregar cuentas bancarias a la respuesta pública
                 cuentas: cuentasBancarias
             }
-        });
+        };
+
+        serverCache.publicConfigCached = payload;
+        serverCache.publicConfigCachedTime = Date.now();
+
+        res.json(payload);
     } catch (error) {
         return res.status(500).json({
             success: false,
@@ -1728,7 +1897,7 @@ app.get('/api/public/config', (req, res) => {
  * 
  * IMPORTANTE PARA PRODUCCIÓN:
  * Cuando Facebook, WhatsApp, Twitter, LinkedIn hacen "crawl" (a través de bots),
- * reciben METADATOS DINÁMICOS basados en config.json actual.
+ * reciben metadatos dinámicos basados en la configuración actual.
  * 
  * Así la vista previa en redes sociales SIEMPRE muestra:
  * ✅ Título actual del sorteo
@@ -1740,17 +1909,14 @@ app.get('/api/public/config', (req, res) => {
  */
 app.get('/api/og-metadata', (req, res) => {
     try {
-        const configPath = path.join(__dirname, 'config.json');
-        
-        if (!fs.existsSync(configPath)) {
+        const config = obtenerConfigActual();
+
+        if (!config || Object.keys(config).length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'config.json no encontrado'
+                message: 'Configuración no disponible'
             });
         }
-
-        const configData = fs.readFileSync(configPath, 'utf8');
-        const config = JSON.parse(configData);
 
         const metadatosConstruidos = construirMetadatosSeo(config, req);
 
@@ -1787,12 +1953,12 @@ app.get('/api/og-metadata', (req, res) => {
 
 app.get('/api/admin/config', verificarToken, async (req, res) => {
     try {
-        const configPath = path.join(__dirname, 'config.json');
-        const configData = fs.readFileSync(configPath, 'utf8');
-        const config = JSON.parse(configData);
+        const config = obtenerConfigActual();
+        console.log(`[GET /api/admin/config] Leyendo desde ${configManagerV2 ? 'ConfigManagerV2 (BD)' : 'config legacy/fallback'}`);
 
         res.json({
             success: true,
+            cargadoDesde: configManagerV2?.esBD ? 'bd' : 'fallback',
             data: {
                 // Datos del cliente
                 cliente: config.cliente || {},
@@ -2036,44 +2202,44 @@ app.patch('/api/admin/config', verificarToken, async (req, res) => {
             });
         }
 
-        // 🔒 PASO 1: Adquirir file lock (máx 10 segundos)
-        try {
-            release = await lockfile.lock(configPath, {
-                realpath: false,
-                retries: {
-                    retries: 50,
-                    minTimeout: 100,
-                    maxTimeout: 200
-                }
-            });
-        } catch (lockError) {
-            return res.status(503).json({
-                success: false,
-                message: 'Servidor ocupado. Intenta de nuevo en unos segundos',
-                error: 'LOCK_TIMEOUT'
-            });
+        const usarPersistenciaLegacy = !configManagerV2;
+
+        // 🔒 PASO 1: Adquirir file lock solo en modo fallback a config.json
+        if (usarPersistenciaLegacy) {
+            try {
+                release = await lockfile.lock(configPath, {
+                    realpath: false,
+                    retries: {
+                        retries: 50,
+                        minTimeout: 100,
+                        maxTimeout: 200
+                    }
+                });
+            } catch (lockError) {
+                return res.status(503).json({
+                    success: false,
+                    message: 'Servidor ocupado. Intenta de nuevo en unos segundos',
+                    error: 'LOCK_TIMEOUT'
+                });
+            }
         }
 
-        // 📖 PASO 2: Leer config actual
-        let configData;
+        // 📖 PASO 2: Leer config actual desde la fuente de verdad
+        let config;
         try {
-            configData = fs.readFileSync(configPath, 'utf8');
+            config = obtenerConfigActual();
         } catch (readError) {
             return res.status(500).json({
                 success: false,
-                message: 'Error leyendo configuración',
+                message: 'Error leyendo configuración actual',
                 error: readError.message
             });
         }
 
-        let config;
-        try {
-            config = JSON.parse(configData);
-        } catch (parseError) {
+        if (!config || typeof config !== 'object' || Object.keys(config).length === 0) {
             return res.status(500).json({
                 success: false,
-                message: 'Error parseando configuración (config.json corrupto)',
-                error: parseError.message
+                message: 'No se pudo obtener una configuración base válida'
             });
         }
 
@@ -2141,7 +2307,7 @@ app.patch('/api/admin/config', verificarToken, async (req, res) => {
         }
 
         // 💾 PASO 5: Crear backup automático ANTES de actualizar
-        await crearBackupConfig(configPath);
+        await crearBackupConfig(configPath, config);
 
         // 🔄 PASO 6: Actualizar configuración (transacción atómica)
         // Actualizar sistemaPremios SOLO si fue enviado
@@ -2275,6 +2441,27 @@ app.patch('/api/admin/config', verificarToken, async (req, res) => {
             if (req.body.rifa.precioBoleto !== undefined) config.rifa.precioBoleto = parseFloat(req.body.rifa.precioBoleto) || config.rifa.precioBoleto;
             if (req.body.rifa.descripcion) config.rifa.descripcion = req.body.rifa.descripcion;
             if (req.body.rifa.publicacion) config.rifa.publicacion = req.body.rifa.publicacion;
+            if (req.body.rifa.rangos !== undefined) {
+                const rangosNormalizados = Array.isArray(req.body.rifa.rangos)
+                    ? req.body.rifa.rangos
+                        .map((rango, index) => {
+                            const inicio = parseInt(rango?.inicio, 10);
+                            const fin = parseInt(rango?.fin, 10);
+                            const nombre = sanitizar(String(rango?.nombre || `Rango ${index + 1}`)).trim() || `Rango ${index + 1}`;
+
+                            if (!Number.isInteger(inicio) || !Number.isInteger(fin) || inicio < 0 || fin < inicio) {
+                                return null;
+                            }
+
+                            return { inicio, fin, nombre };
+                        })
+                        .filter(Boolean)
+                    : [];
+
+                if (rangosNormalizados.length > 0) {
+                    config.rifa.rangos = rangosNormalizados;
+                }
+            }
         if (req.body.rifa.ayuda !== undefined) {
             const preguntasFrecuentes = Array.isArray(req.body.rifa.ayuda?.preguntasFrecuentes)
                 ? req.body.rifa.ayuda.preguntasFrecuentes
@@ -2427,6 +2614,18 @@ app.patch('/api/admin/config', verificarToken, async (req, res) => {
                 });
             }
 
+            if (req.body.rifa.busquedaBoletos !== undefined) {
+                const busquedaRecibida = req.body.rifa.busquedaBoletos || {};
+                config.rifa.busquedaBoletos = {
+                    ...(config.rifa.busquedaBoletos || {}),
+                    modoAvanzado: busquedaRecibida.modoAvanzado === true
+                };
+
+                console.log('[PATCH /api/admin/config] 🔎 Configuración de búsqueda de boletos actualizada:', {
+                    modoAvanzado: config.rifa.busquedaBoletos.modoAvanzado
+                });
+            }
+
             // ⏲️ AGREGAR SOPORTE PARA PROMOCIÓN POR TIEMPO
             if (req.body.rifa.promocionPorTiempo !== undefined) {
                 config.rifa.promocionPorTiempo = req.body.rifa.promocionPorTiempo;
@@ -2511,9 +2710,30 @@ app.patch('/api/admin/config', verificarToken, async (req, res) => {
                         : multiplicadorActual
                 };
 
+                const normalizarRangoConfig = (rango) => {
+                    const inicio = parseInt(rango?.inicio, 10);
+                    const fin = parseInt(rango?.fin, 10);
+                    if (!Number.isInteger(inicio) || !Number.isInteger(fin) || inicio < 0 || fin < inicio) {
+                        return null;
+                    }
+                    return { inicio, fin };
+                };
+
+                if (oportunidadesRecibidas.rango_visible !== undefined) {
+                    const rangoVisible = normalizarRangoConfig(oportunidadesRecibidas.rango_visible);
+                    config.rifa.oportunidades.rango_visible = rangoVisible || false;
+                }
+
+                if (oportunidadesRecibidas.rango_oculto !== undefined) {
+                    const rangoOculto = normalizarRangoConfig(oportunidadesRecibidas.rango_oculto);
+                    config.rifa.oportunidades.rango_oculto = rangoOculto || null;
+                }
+
                 console.log('[PATCH /api/admin/config] 🎟️ Oportunidades actualizadas:', {
                     enabled: config.rifa.oportunidades.enabled,
-                    multiplicador: config.rifa.oportunidades.multiplicador
+                    multiplicador: config.rifa.oportunidades.multiplicador,
+                    rango_visible: config.rifa.oportunidades.rango_visible || null,
+                    rango_oculto: config.rifa.oportunidades.rango_oculto || null
                 });
             }
 
@@ -2577,9 +2797,8 @@ app.patch('/api/admin/config', verificarToken, async (req, res) => {
             config.seo = normalizarSeoConfigParaPersistencia(req.body.seo, config);
         }
 
-        // 📝 PASO 7: Escribir de forma asincrónica
-        const nuevoContenido = JSON.stringify(config, null, 2);
-        
+        // 📝 PASO 7: Persistir y sincronizar en memoria
+
         // DEBUG: Guardar en archivo lo que vamos a escribir
         try {
             fs.writeFileSync('/tmp/patch-debug.json', JSON.stringify({
@@ -2604,33 +2823,49 @@ app.patch('/api/admin/config', verificarToken, async (req, res) => {
         });
         
         try {
-            await new Promise((resolve, reject) => {
-                fs.writeFile(configPath, nuevoContenido, 'utf8', (err) => {
-                    if (err) {
-                        console.error('[PATCH /api/admin/config] ❌ Error en writeFile:', err);
-                        reject(err);
-                    } else {
-                        console.log('[PATCH /api/admin/config] ✅ writeFile completado');
-                        resolve();
-                    }
+            // 🟦 PASO 7A: Intentar guardar en BD con ConfigManagerV2
+            let guardadoEnBD = false;
+            if (configManagerV2) {
+                try {
+                    const resultado = await configManagerV2.guardarEnBD(config, req.usuario.username);
+                    guardadoEnBD = resultado;
+                    console.log(`[PATCH /api/admin/config] ${guardadoEnBD ? '✅' : '⚠️'} ConfigManagerV2 guardó: ${guardadoEnBD ? 'BD' : 'config.json (fallback)'}`);
+                } catch (bdError) {
+                    console.warn('[PATCH /api/admin/config] ⚠️  ConfigManagerV2 error, usando config.json:', bdError.message);
+                }
+            } else {
+                console.log('[PATCH /api/admin/config] ℹ️  ConfigManagerV2 aún no inicializado, guardando en config.json');
+            }
+
+            // 🟨 PASO 7B: Fallback a config.json si es necesario
+            if (!guardadoEnBD) {
+                console.log('[PATCH /api/admin/config] 📝 Guardando en config.json...');
+                await new Promise((resolve, reject) => {
+                    const nuevoContenido = JSON.stringify(config, null, 2);
+                    fs.writeFile(configPath, nuevoContenido, 'utf8', (err) => {
+                        if (err) {
+                            console.error('[PATCH /api/admin/config] ❌ Error en writeFile:', err);
+                            reject(err);
+                        } else {
+                            console.log('[PATCH /api/admin/config] ✅ config.json guardado');
+                            resolve();
+                        }
+                    });
                 });
-            });
-            
-            // ✅ VERIFICACIÓN: Leer el archivo que acabamos de escribir
-            const verificacion = fs.readFileSync(configPath, 'utf8');
-            const configVerificada = JSON.parse(verificacion);
+            }
+
+            sincronizarConfigLegacyEnMemoria(config);
+            const configVerificada = obtenerConfigActual();
             console.log('[PATCH /api/admin/config] ✅ VERIFICACIÓN POST-WRITE:', {
                 imagenPrincipal: configVerificada.cliente?.imagenPrincipal,
                 logo: configVerificada.cliente?.logo,
-                logotipo: configVerificada.cliente?.logotipo,
                 nombreCliente: configVerificada.cliente?.nombre,
-                rifaGaleriaImagenes: configVerificada.rifa?.galeria?.imagenes?.length || 0,
                 tiempoApartadoHoras: configVerificada.rifa?.tiempoApartadoHoras,
-                tiempoApartadoGuardadoCorrectamente: configVerificada.rifa?.tiempoApartadoHoras === config.rifa?.tiempoApartadoHoras ? '✅ SÍ' : '❌ NO'
+                guardadoEnBD: guardadoEnBD ? '🟦 Sí' : '🟨 No (config.json)'
             });
         } catch (writeError) {
             console.error('[PATCH /api/admin/config] ❌ writeError:', writeError);
-            log('error', 'Error escribiendo config.json', { error: writeError.message, usuario: req.usuario.username });
+            log('error', 'Error guardando configuración', { error: writeError.message, usuario: req.usuario.username });
             return res.status(500).json({
                 success: false,
                 message: 'Error guardando configuración',
@@ -2639,8 +2874,8 @@ app.patch('/api/admin/config', verificarToken, async (req, res) => {
         }
 
         try {
-            configManager.reload();
-            console.log('[PATCH /api/admin/config] ✅ ConfigManager recargado en memoria');
+            sincronizarConfigLegacyEnMemoria(configManagerV2?.getConfig?.() || config);
+            console.log('[PATCH /api/admin/config] ✅ Configuración sincronizada en memoria');
         } catch (reloadError) {
             console.error('[PATCH /api/admin/config] ❌ Error recargando ConfigManager:', reloadError);
             return res.status(500).json({
@@ -2649,6 +2884,8 @@ app.patch('/api/admin/config', verificarToken, async (req, res) => {
                 error: reloadError.message
             });
         }
+
+        limpiarCacheConfiguracionPublica();
 
         // ✅ PASO 8: Log de éxito
         const camposActualizados = [];
@@ -2965,7 +3202,7 @@ function obtenerPrefijoOrdenCliente(clienteId, configActor = null) {
         const prefijoConfig = String(configParaUsar?.cliente?.prefijoOrden || '').trim().toUpperCase();
         
         if (prefijoConfig && prefijoConfig.length >= 2) {
-            console.log(`✅ PREFIJO ORDEN: "${prefijoConfig}" (desde config.json)`);
+            console.log(`✅ PREFIJO ORDEN: "${prefijoConfig}" (desde configuración actual)`);
             return prefijoConfig;
         }
         
@@ -3206,18 +3443,27 @@ app.post('/api/ordenes', limiterOrdenes, async (req, res) => {
                 };
             }
 
-            // PASO 2: Verificar disponibilidad de boletos
+            // PASO 2: Bloquear boletos objetivo y verificar disponibilidad real
+            // El orden consistente reduce riesgo de deadlocks en compras concurrentes.
+            const boletosOrdenados = [...boletosValidos].sort((a, b) => a - b);
             const boletosBD = await trx('boletos_estado')
-                .whereIn('numero', boletosValidos)
-                .select('numero', 'estado', 'numero_orden');
+                .whereIn('numero', boletosOrdenados)
+                .select('numero', 'estado', 'numero_orden')
+                .orderBy('numero', 'asc')
+                .forUpdate();
 
-            const boletosNoDisponibles = boletosBD.filter(b => 
+            const boletosEncontrados = new Set(boletosBD.map((boleto) => Number(boleto.numero)));
+            const boletosFaltantes = boletosOrdenados.filter((numero) => !boletosEncontrados.has(numero));
+            const boletosNoDisponibles = boletosBD.filter((b) =>
                 b.estado !== 'disponible' || b.numero_orden !== null
             );
 
-            if (boletosNoDisponibles.length > 0) {
+            if (boletosNoDisponibles.length > 0 || boletosFaltantes.length > 0) {
                 // Calcular qué boletos SÍ están disponibles
-                const numerosConflictivos = boletosNoDisponibles.map(b => b.numero);
+                const numerosConflictivos = Array.from(new Set([
+                    ...boletosNoDisponibles.map((b) => Number(b.numero)),
+                    ...boletosFaltantes
+                ])).sort((a, b) => a - b);
                 const boletosDisponibles = boletosValidos.filter(n => !numerosConflictivos.includes(n));
                 
                 throw {
@@ -3253,14 +3499,37 @@ app.post('/api/ordenes', limiterOrdenes, async (req, res) => {
 
             await trx('ordenes').insert(ordenData);
 
-            // PASO 4: UPDATE boletos a estado 'apartado' y asignar a orden
-            await trx('boletos_estado')
-                .whereIn('numero', boletosValidos)
+            // PASO 4: Reservar boletos de forma condicional.
+            // Si algo cambió entre validación y update, la transacción se revierte.
+            const boletosActualizados = await trx('boletos_estado')
+                .whereIn('numero', boletosOrdenados)
+                .where('estado', 'disponible')
+                .whereNull('numero_orden')
                 .update({
                     numero_orden: ordenId,
                     estado: 'apartado',
                     updated_at: new Date()
                 });
+
+            if (boletosActualizados !== boletosOrdenados.length) {
+                const boletosConflictoBD = await trx('boletos_estado')
+                    .whereIn('numero', boletosOrdenados)
+                    .where(function() {
+                        this.whereNot('estado', 'disponible').orWhereNotNull('numero_orden');
+                    })
+                    .select('numero');
+
+                const numerosConflictivos = Array.from(new Set(
+                    boletosConflictoBD.map((boleto) => Number(boleto.numero))
+                )).sort((a, b) => a - b);
+
+                throw {
+                    code: 'BOLETOS_CONFLICTO',
+                    boletosConflicto: numerosConflictivos,
+                    boletosDisponibles: boletosValidos.filter((n) => !numerosConflictivos.includes(n)),
+                    message: 'Algunos boletos cambiaron de estado mientras se procesaba la orden'
+                };
+            }
 
             if (oportunidadesHabilitadas) {
                 // PASO 4.5: Ligar oportunidades a la orden solo si están habilitadas
@@ -3292,6 +3561,11 @@ app.post('/api/ordenes', limiterOrdenes, async (req, res) => {
         // Respuesta
         if (resultado.isDuplicate) {
             // Idempotencia: 200 OK si la orden ya existe
+            logOperacionHttp('POST /api/ordenes (idempotente)', startTime, {
+                ordenId: resultado.ordenExistente.numero_orden,
+                cantidad: resultado.ordenExistente.cantidad_boletos,
+                statusCode: 200
+            }, { slowMs: 1200, warnMs: 2500 });
             return res.json({
                 success: true,
                 message: 'Orden ya registrada',
@@ -3314,6 +3588,12 @@ app.post('/api/ordenes', limiterOrdenes, async (req, res) => {
 
         const host = req.headers.host || `localhost:${PORT}`;
         log('info', 'Orden creada exitosamente', { ordenId, cantidad: resultado.cantidad, total: resultado.total });
+        logOperacionHttp('POST /api/ordenes', startTime, {
+            ordenId,
+            cantidad: resultado.cantidad,
+            total: resultado.total,
+            statusCode: 200
+        }, { slowMs: 1200, warnMs: 2500 });
 
         // 🔌 EMITIR EVENTO DE WEBSOCKET: Nueva orden creada (actualizar grilla en tiempo real)
         if (wsEvents) {
@@ -3355,6 +3635,11 @@ app.post('/api/ordenes', limiterOrdenes, async (req, res) => {
         // Errores específicos
         if (error.code === 'BOLETOS_CONFLICTO') {
             log('warn', 'Boletos en conflicto detectados', { ordenId, conflictos: error.boletosConflicto.length });
+            logOperacionHttp('POST /api/ordenes (conflicto)', startTime, {
+                ordenId,
+                conflictos: error.boletosConflicto.length,
+                statusCode: 409
+            }, { slowMs: 1200, warnMs: 2500 });
             return res.status(409).json({
                 success: false,
                 code: 'BOLETOS_CONFLICTO',
@@ -3366,6 +3651,11 @@ app.post('/api/ordenes', limiterOrdenes, async (req, res) => {
 
         // Error genérico
         log('error', 'POST /api/ordenes error', { errorId, error: error.message, ordenId });
+        logOperacionHttp('POST /api/ordenes (error)', startTime, {
+            ordenId,
+            errorId,
+            statusCode: 500
+        }, { slowMs: 1200, warnMs: 2500 });
         
         if (!res.headersSent) {
             return res.status(500).json({
@@ -4080,6 +4370,7 @@ app.get('/api/public/ordenes-cliente', async (req, res) => {
  */
 app.post('/api/public/ordenes-cliente/:numero_orden/comprobante', async (req, res) => {
     const debugId = `[COMPROBANTE-${Date.now()}]`;
+    const startTime = Date.now();
     
     try {
         const { numero_orden } = req.params;
@@ -4105,6 +4396,11 @@ app.post('/api/public/ordenes-cliente/:numero_orden/comprobante', async (req, re
             // cloudinary_url: resultado.url,
             ip: req.ip
         });
+        logOperacionHttp('POST /api/public/ordenes-cliente/:numero_orden/comprobante', startTime, {
+            numero_orden,
+            tamaño_mb: resultado.tamaño_mb,
+            statusCode: 200
+        }, { slowMs: 1500, warnMs: 4000 });
 
         // 🔒 NO retornar URL completa al cliente (solo confirmación)
         return res.json({
@@ -4140,6 +4436,11 @@ app.post('/api/public/ordenes-cliente/:numero_orden/comprobante', async (req, re
             numero_orden: req.params.numero_orden || 'N/A',
             ip: req.ip
         });
+        logOperacionHttp('POST /api/public/ordenes-cliente/:numero_orden/comprobante (error)', startTime, {
+            numero_orden: req.params.numero_orden || 'N/A',
+            statusCode,
+            error: errorMessage
+        }, { slowMs: 1500, warnMs: 4000 });
 
         // 🔒 Sanitizar el mensaje de error ANTES de enviar al cliente
         const safeMessage = sanitizarErrorMessage(errorMessage, process.env.NODE_ENV === 'development');
@@ -4979,7 +5280,7 @@ app.get('/api/admin/clear-cache', verificarToken, (req, res) => {
  * ⚡ ULTRA-RÁPIDO: Solo conteos cacheados + índices
  * Devuelve en < 50ms usando caché en memoria
  * 
- * ✅ DINÁMICO: Lee totalBoletos desde config.json en tiempo real
+ * ✅ DINÁMICO: Lee totalBoletos desde la configuración actual (BD)
  * ✅ CACHEADO: Stats se cachean por 5 segundos (TTL configurable)
  */
 app.get('/api/public/boletos/stats', async (req, res) => {
@@ -4997,6 +5298,11 @@ app.get('/api/public/boletos/stats', async (req, res) => {
             // Usar caché si existe y no es viejo
             const cached = global.boletosStatsCache;
             const age = now - global.boletosStatsCacheTime;
+            logOperacionHttp('GET /api/public/boletos/stats (cache)', startTime, {
+                cached: true,
+                cacheAgeMs: age,
+                statusCode: 200
+            }, { slowMs: 250, warnMs: 800 });
             return res.json({
                 success: true,
                 data: {
@@ -5043,11 +5349,12 @@ app.get('/api/public/boletos/stats', async (req, res) => {
         // ⭐ GUARDAR EN CACHÉ (20 segundos)
         global.boletosStatsCache = { vendidos: stats.vendidos, apartados: stats.apartados, disponibles: disponibles };
         global.boletosStatsCacheTime = now;
-
-        // Log si toma más de 1000ms
-        if (queryTime > 1000) {
-            console.warn(`⚠️  [PublicBoletoStats] Query lenta: ${queryTime}ms`);
-        }
+        logOperacionHttp('GET /api/public/boletos/stats', startTime, {
+            cached: false,
+            vendidos: stats.vendidos,
+            apartados: stats.apartados,
+            statusCode: 200
+        }, { slowMs: 300, warnMs: 1000 });
 
         return res.json({
             success: true,
@@ -5063,6 +5370,7 @@ app.get('/api/public/boletos/stats', async (req, res) => {
 
     } catch (error) {
         console.error('[PublicBoletoStats] Error:', error.message);
+        log('error', 'GET /api/public/boletos/stats error', { error: error.message });
         const config = cargarConfigSorteo();
         
         // ⭐ FALLBACK: Usar caché anterior o valores por defecto
@@ -5129,9 +5437,10 @@ app.get('/api/public/boletos', async (req, res) => {
         
         const startTime = Date.now();
         
-        // ✅ OBTENER TOTAL DE BOLETOS DESDE config.js
-        const configExpiracion = obtenerConfigExpiracion();
-        const totalBoletos = configExpiracion.totalBoletos;
+        // ✅ OBTENER TOTAL DE BOLETOS DESDE LA CONFIGURACIÓN ACTUAL
+        const configActual = obtenerConfigActual();
+        const fallbackConfig = obtenerConfigExpiracion();
+        const totalBoletos = Number(configActual?.rifa?.totalBoletos) || Number(fallbackConfig?.totalBoletos) || 1000000;
 
         if (usarRango && (inicioQuery < 0 || finQuery >= totalBoletos)) {
             return res.status(400).json({
@@ -5140,75 +5449,97 @@ app.get('/api/public/boletos', async (req, res) => {
             });
         }
 
-        // ⭐ QUERY ULTRA OPTIMIZADA: Usar índices para contar en paralelo
-        // IMPORTANTE: Aumentar timeouts de 5s a 10s para evitar timeouts
-        const [countResult, oportunidadesCount] = await Promise.all([
-            db.raw(`
-                SELECT 
-                    COUNT(*) FILTER (WHERE estado = 'vendido')::int as vendidos,
-                    COUNT(*) FILTER (WHERE estado = 'apartado')::int as reservados
-                FROM boletos_estado
-            `).timeout(10000),
-            db.raw(`
-                SELECT COUNT(*)::int as count FROM orden_oportunidades 
-                WHERE estado = 'disponible'
-            `).timeout(10000)
-        ]);
-        
-        const countData = countResult.rows && countResult.rows[0] ? countResult.rows[0] : { vendidos: 0, reservados: 0 };
-        const vendidos = parseInt(countData.vendidos) || 0;
-        const reservados = parseInt(countData.reservados) || 0;
-        const boletosOcultos = parseInt(oportunidadesCount.rows?.[0]?.count || 0);
+        const cacheTtl = process.env.NODE_ENV === 'production' ? 60000 : 5000;
+        const cacheVigente = global.boletosPublicRangeStatsCache
+            && global.boletosPublicRangeStatsCacheTime
+            && (Date.now() - global.boletosPublicRangeStatsCacheTime) < cacheTtl;
 
-        // Traer las listas reales CON ÍNDICES (paralelo para máxima velocidad)
-        // OPTIMIZACIÓN: Aumentar timeouts a 15s para garantizar que terminen
-        let boletosNoDisponiblesQuery = db('boletos_estado')
-            .whereIn('estado', ['vendido', 'apartado'])
-            .select('numero', 'estado')
-            .timeout(15000)
-            .orderBy('numero');
+        let statsGlobales = cacheVigente ? global.boletosPublicRangeStatsCache : null;
+        let boletosOcultos = statsGlobales?.boletosOcultos || 0;
 
-        if (usarRango) {
-            boletosNoDisponiblesQuery = boletosNoDisponiblesQuery.whereBetween('numero', [inicioQuery, finQuery]);
+        if (!statsGlobales) {
+            const [countResult, oportunidadesCount] = await Promise.all([
+                db.raw(`
+                    SELECT 
+                        COUNT(*) FILTER (WHERE estado = 'vendido')::int as vendidos,
+                        COUNT(*) FILTER (WHERE estado = 'apartado')::int as apartados
+                    FROM boletos_estado
+                `).timeout(10000),
+                db.raw(`
+                    SELECT COUNT(*)::int as count FROM orden_oportunidades 
+                    WHERE estado = 'disponible'
+                `).timeout(10000)
+            ]);
+
+            const countData = countResult.rows?.[0] || { vendidos: 0, apartados: 0 };
+            boletosOcultos = parseInt(oportunidadesCount.rows?.[0]?.count || 0, 10) || 0;
+            const vendidosGlobales = parseInt(countData.vendidos, 10) || 0;
+            const apartadosGlobales = parseInt(countData.apartados, 10) || 0;
+            const disponiblesGlobales = Math.max(0, totalBoletos - vendidosGlobales - apartadosGlobales - boletosOcultos);
+
+            statsGlobales = {
+                vendidos: vendidosGlobales,
+                apartados: apartadosGlobales,
+                boletosOcultos: boletosOcultos,
+                disponibles: disponiblesGlobales
+            };
+            global.boletosPublicRangeStatsCache = statsGlobales;
+            global.boletosPublicRangeStatsCacheTime = Date.now();
         }
 
-        const [boletosNoDisponibles, oportunidadesList] = await Promise.all([
-            boletosNoDisponiblesQuery,
-            db('orden_oportunidades')
-                .where('estado', 'reservado')
-                .select('numero_oportunidad')
-                .timeout(15000)
-                .orderBy('numero_oportunidad')
-        ]);
+        let sold = [];
+        let reserved = [];
+        let oportunidades = [];
 
-        // Procesar en JavaScript (más rápido que en SQL)
-        const sold = new Set();
-        const reserved = new Set();
-        
-        boletosNoDisponibles.forEach(b => {
-            if (b.estado === 'vendido') {
-                sold.add(Number(b.numero));
-            } else {
-                reserved.add(Number(b.numero));
-            }
-        });
-        
-        // Agregar oportunidades en un SET SEPARADO (no mezclar con boletos)
-        const oportunidadesSet = new Set();
-        oportunidadesList.forEach(o => {
-            oportunidadesSet.add(Number(o.numero_oportunidad));
-        });
+        if (usarRango) {
+            const estadoRango = await BoletoService.obtenerEstadoNoDisponibleEnRango(inicioQuery, finQuery);
+            sold = estadoRango.sold;
+            reserved = estadoRango.reserved;
+        } else {
+            const [estadoCompleto, oportunidadesList, oportunidadesDisponiblesCount] = await Promise.all([
+                db('boletos_estado')
+                    .whereIn('estado', ['vendido', 'apartado'])
+                    .select('numero', 'estado')
+                    .timeout(15000)
+                    .orderBy('numero'),
+                db('orden_oportunidades')
+                    .where('estado', 'reservado')
+                    .select('numero_oportunidad')
+                    .timeout(15000)
+                    .orderBy('numero_oportunidad'),
+                boletosOcultos > 0
+                    ? Promise.resolve({ rows: [{ count: boletosOcultos }] })
+                    : db.raw(`
+                        SELECT COUNT(*)::int as count FROM orden_oportunidades 
+                        WHERE estado = 'disponible'
+                    `).timeout(10000)
+            ]);
 
-        const totalApartados = reserved.size + boletosOcultos;
-        const disponibles = Math.max(0, totalBoletos - vendidos - totalApartados);
+            estadoCompleto.forEach((b) => {
+                if (b.estado === 'vendido') {
+                    sold.push(Number(b.numero));
+                } else {
+                    reserved.push(Number(b.numero));
+                }
+            });
+
+            oportunidades = oportunidadesList.map((o) => Number(o.numero_oportunidad));
+            boletosOcultos = parseInt(oportunidadesDisponiblesCount.rows?.[0]?.count || 0, 10) || boletosOcultos;
+        }
+
+        const vendidos = statsGlobales.vendidos || 0;
+        const reservados = statsGlobales.apartados || 0;
+        boletosOcultos = Number(statsGlobales.boletosOcultos || boletosOcultos || 0);
+        const totalApartados = reservados + boletosOcultos;
+        const disponibles = Math.max(0, statsGlobales.disponibles ?? (totalBoletos - vendidos - totalApartados));
         const queryTime = Date.now() - startTime;
         
         const payload = {
             success: true,
             data: {
-                sold: Array.from(sold),
-                reserved: Array.from(reserved),
-                oportunidades: Array.from(oportunidadesSet)  // ← SEPARADO, no mezclado
+                sold: sold,
+                reserved: reserved,
+                oportunidades: oportunidades
             },
             stats: {
                 vendidos: vendidos,
@@ -5239,7 +5570,7 @@ app.get('/api/public/boletos', async (req, res) => {
         }
 
         if (queryTime > 1000 || Math.random() < 0.05) {
-            console.log(`[PublicBoletos] Vendidos: ${vendidos}, Apartados: ${reserved.size}, Oportunidades: ${boletosOcultos}, Total apartados: ${totalApartados}, Time: ${queryTime}ms`);
+            console.log(`[PublicBoletos] Vendidos: ${vendidos}, Apartados: ${reservados}, Oportunidades: ${boletosOcultos}, Total apartados: ${totalApartados}, Time: ${queryTime}ms, Rango: ${usarRango ? `${inicioQuery}-${finQuery}` : 'completo'}`);
         }
 
         return res.json(payload);
@@ -5260,15 +5591,253 @@ app.get('/api/public/boletos', async (req, res) => {
             console.warn('[PublicBoletos] Error - usando cache antiguo');
             return res.json(serverCache.boletosPublicosCached);
         }
+
+        const totalFallback = Number(obtenerConfigActual()?.rifa?.totalBoletos) || Number(obtenerConfigExpiracion()?.totalBoletos) || 60000;
         
         return res.json({
             success: false,
             message: 'Error temporal',
             data: { sold: [], reserved: [] },
             stats: {
-                vendidos: 0, reservados: 0, disponibles: 60000, total: 60000,
+                vendidos: 0, reservados: 0, disponibles: totalFallback, total: totalFallback,
                 cached: false, error: error.message
             }
+        });
+    }
+});
+
+app.get('/api/public/boletos/busqueda', limiterOrdenes, async (req, res) => {
+    try {
+        const modo = String(req.query.modo || req.query.mode || 'exacto').trim().toLowerCase();
+        const availableOnly = ['1', 'true', 'si', 'sí', 'on'].includes(String(req.query.availableOnly || '').trim().toLowerCase());
+        const limiteSolicitado = parseInt(req.query.limite || req.query.limit, 10);
+        const offsetSolicitado = parseInt(req.query.offset, 10);
+        const limite = Number.isInteger(limiteSolicitado)
+            ? Math.max(1, Math.min(limiteSolicitado, 1000))
+            : 100;
+        const offset = Number.isInteger(offsetSolicitado)
+            ? Math.max(0, offsetSolicitado)
+            : 0;
+
+        const configActual = obtenerConfigActual();
+        const fallbackConfig = obtenerConfigExpiracion();
+        const totalBoletos = Number(configActual?.rifa?.totalBoletos) || Number(fallbackConfig?.totalBoletos) || 1000000;
+        const maxNumero = Math.max(0, totalBoletos - 1);
+        const anchoBoletos = String(maxNumero).length;
+
+        const modosPermitidos = new Set(['exacto', 'empieza', 'termina', 'contiene', 'rango']);
+        if (!modosPermitidos.has(modo)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Modo de búsqueda inválido'
+            });
+        }
+
+        const formatearRespuesta = (items, criterios = {}) => ({
+            success: true,
+            data: {
+                items: items.map((item) => ({
+                    numero: Number(item.numero),
+                    estado: item.estado || 'disponible'
+                })),
+                modo,
+                availableOnly,
+                limite,
+                offset,
+                truncado: items.length === limite,
+                totalBoletos,
+                criterios
+            }
+        });
+
+        if (modo === 'exacto') {
+            const valor = String(req.query.q || req.query.valor || '').trim();
+            const numero = parseInt(valor, 10);
+
+            if (!/^\d+$/.test(valor) || !Number.isInteger(numero)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Ingresa un número de boleto válido'
+                });
+            }
+
+            if (numero < 0 || numero > maxNumero) {
+                return res.status(400).json({
+                    success: false,
+                    message: `El boleto debe estar entre 0 y ${maxNumero}`
+                });
+            }
+
+            const estadoRegistro = await db('boletos_estado')
+                .where({ numero })
+                .whereIn('estado', ['vendido', 'apartado'])
+                .timeout(10000)
+                .first('estado');
+
+            const estado = estadoRegistro?.estado || 'disponible';
+            const items = availableOnly && estado !== 'disponible'
+                ? []
+                : [{ numero, estado }];
+
+            return res.json(formatearRespuesta(items, { q: valor }));
+        }
+
+        if (modo === 'rango') {
+            const inicio = parseInt(req.query.inicio, 10);
+            const fin = parseInt(req.query.fin, 10);
+
+            if (!Number.isInteger(inicio) || !Number.isInteger(fin) || inicio < 0 || fin < inicio || fin > maxNumero) {
+                return res.status(400).json({
+                    success: false,
+                    message: `El rango debe ser válido y estar entre 0 y ${maxNumero}`
+                });
+            }
+
+            const serieQuery = db
+                .select(db.raw('gs::int AS numero'))
+                .from(db.raw('generate_series(?::bigint, ?::bigint) AS gs', [inicio, fin]))
+                .as('s');
+
+            const query = construirQueryBusquedaSobreSerie(serieQuery, {
+                availableOnly,
+                limite,
+                offset
+            });
+            const items = await query;
+            return res.json(formatearRespuesta(items || [], { inicio, fin }));
+        }
+
+        const valor = String(req.query.q || req.query.valor || '').trim();
+        if (!/^\d+$/.test(valor)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Usa solo números en este tipo de búsqueda'
+            });
+        }
+
+        if (valor.length > anchoBoletos) {
+            return res.json(formatearRespuesta([], { q: valor }));
+        }
+
+        if (modo === 'empieza') {
+            const rangoPrefijo = construirRangoPorPrefijo(valor, anchoBoletos, maxNumero);
+            if (!rangoPrefijo) {
+                return res.json(formatearRespuesta([], { q: valor }));
+            }
+
+            const seriePrefijo = db
+                .select(db.raw('gs::int AS numero'))
+                .from(db.raw('generate_series(?::bigint, ?::bigint) AS gs', [rangoPrefijo.inicio, rangoPrefijo.fin]))
+                .as('s');
+
+            const items = await construirQueryBusquedaSobreSerie(seriePrefijo, {
+                availableOnly,
+                limite,
+                offset
+            });
+
+            return res.json(formatearRespuesta(items || [], {
+                q: valor,
+                inicio: rangoPrefijo.inicio,
+                fin: rangoPrefijo.fin
+            }));
+        }
+
+        if (modo === 'termina') {
+            const serieSuffix = construirSerieSuffixQuery(valor, maxNumero);
+            if (!serieSuffix) {
+                return res.json(formatearRespuesta([], { q: valor }));
+            }
+
+            const items = await construirQueryBusquedaSobreSerie(serieSuffix, {
+                availableOnly,
+                limite,
+                offset
+            });
+
+            return res.json(formatearRespuesta(items || [], { q: valor }));
+        }
+
+        let patron = `${valor}%`;
+        if (modo === 'contiene') {
+            patron = `%${valor}%`;
+        }
+
+        const sql = `
+            WITH serie AS (
+                SELECT gs::int AS numero
+                FROM generate_series(0::bigint, ?::bigint) AS gs
+                WHERE LPAD(CAST(gs AS text), ?, '0') LIKE ?
+            )
+            SELECT
+                s.numero,
+                COALESCE(be.estado, 'disponible') AS estado
+            FROM serie s
+            LEFT JOIN boletos_estado be
+                ON be.numero = s.numero
+               AND be.estado IN ('vendido', 'apartado')
+            ${availableOnly ? 'WHERE be.numero IS NULL' : ''}
+            ORDER BY s.numero
+            LIMIT ?
+            OFFSET ?
+        `;
+
+        const resultado = await db.raw(sql, [maxNumero, anchoBoletos, patron, limite, offset]).timeout(15000);
+        return res.json(formatearRespuesta(resultado.rows || [], { q: valor }));
+    } catch (error) {
+        console.error('GET /api/public/boletos/busqueda error:', {
+            message: error.message,
+            stack: error.stack,
+            query: req.query
+        });
+        return res.status(500).json({
+            success: false,
+            message: 'Error al buscar boletos'
+        });
+    }
+});
+
+/**
+ * POST /api/boletos/disponibles-aleatorios
+ * Devuelve boletos aleatorios DISPONIBLES del universo total del sorteo.
+ * La máquina de la suerte usa este endpoint para no depender del rango visible actual.
+ * Body: { cantidad: 5, excludeNumbers: [1, 2, 3] }
+ */
+app.post('/api/boletos/disponibles-aleatorios', async (req, res) => {
+    try {
+        const cantidad = parseInt(req.body?.cantidad, 10);
+        const excludeNumbers = Array.isArray(req.body?.excludeNumbers) ? req.body.excludeNumbers : [];
+
+        if (!Number.isInteger(cantidad) || cantidad < 1) {
+            return res.status(400).json({
+                success: false,
+                message: 'cantidad debe ser un entero mayor a 0'
+            });
+        }
+
+        if (cantidad > 1000) {
+            return res.status(400).json({
+                success: false,
+                message: 'No se pueden solicitar más de 1000 boletos aleatorios a la vez'
+            });
+        }
+
+        const boletos = await BoletoService.obtenerBoletosAleatoriosDisponibles(cantidad, excludeNumbers);
+
+        return res.json({
+            success: true,
+            boletos: boletos,
+            resumen: {
+                solicitados: cantidad,
+                generados: boletos.length
+            }
+        });
+    } catch (error) {
+        log('error', 'POST /api/boletos/disponibles-aleatorios error', { error: error.message });
+        return res.status(500).json({
+            success: false,
+            message: 'Error obteniendo boletos aleatorios disponibles',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 });
@@ -5838,7 +6407,7 @@ app.get('/api/admin/boletos', verificarToken, async (req, res) => {
         const ordenes = await db('ordenes')
             .select('numero_orden', 'boletos', 'estado', 'nombre_cliente', 'telefono_cliente', 'created_at');
 
-        // Obtener totalBoletos desde config.js
+        // Obtener totalBoletos desde la configuración actual
         const configSorteo = cargarConfigSorteo();
         const totalBoletos = configSorteo.totalBoletos;
         
@@ -6746,9 +7315,9 @@ app.get('/api/admin/ordenes-estado-resumen', verificarToken, async (req, res) =>
                     ingresos: totalIngresos.toFixed(2)
                 },
                 configuracion: {
-                    tiempoApartadoHoras: TIEMPO_APARTADO_HORAS,
-                    intervaloLimpiezaMinutos: INTERVALO_LIMPIEZA_MINUTOS,
-                    precioBoleto: obtenerPrecioDinamico()  // ✅ Lee el precio ACTUAL de config.json
+                    tiempoApartadoHoras: cargarConfigSorteo().rifa?.tiempoApartadoHoras || TIEMPO_APARTADO_HORAS,
+                    intervaloLimpiezaMinutos: obtenerConfigActual().rifa?.intervaloLimpiezaMinutos || INTERVALO_LIMPIEZA_MINUTOS,
+                    precioBoleto: obtenerPrecioDinamico()
                 }
             }
         });
@@ -7019,16 +7588,18 @@ const clienteConfig = require('./cliente-config.js');
 
 /**
  * GET /api/cliente
- * Obtiene la configuración del cliente actual (desde config.json)
+ * Obtiene la configuración pública actual del cliente
  * No requiere autenticación (datos públicos)
- * ✅ CRÍTICO: Lee desde config.json para reflejar cambios del admin
+ * ✅ CRÍTICO: Usa la configuración dinámica actual
  */
 app.get('/api/cliente', (req, res) => {
     try {
-        // ✅ Leer desde config.json en lugar de cliente-config.js hardcodeado
-        const configPath = path.join(__dirname, 'config.json');
-        const configData = fs.readFileSync(configPath, 'utf8');
-        const config = JSON.parse(configData);
+        const cacheAge = Date.now() - serverCache.clienteConfigCachedTime;
+        if (serverCache.clienteConfigCached && cacheAge >= 0 && cacheAge < 10000) {
+            return res.json(serverCache.clienteConfigCached);
+        }
+
+        const config = obtenerConfigActual();
         
         // ✅ VALIDACIÓN: Asegurar estructura mínima
         if (!config.cliente) config.cliente = {};
@@ -7037,19 +7608,20 @@ app.get('/api/cliente', (req, res) => {
         
         // ✅ VALIDACIÓN: Campos críticos de rifa
         if (!config.rifa.nombreSorteo) {
-            console.warn('⚠️  nombreSorteo vacío en config.json, usando fallback');
+            console.warn('⚠️  nombreSorteo vacío en configuración actual, usando fallback');
             config.rifa.nombreSorteo = 'SORTEO EN VIVO';
         }
         if (!config.rifa.totalBoletos || isNaN(config.rifa.totalBoletos) || config.rifa.totalBoletos <= 0) {
-            console.warn('⚠️  totalBoletos inválido en config.json, usando fallback');
+            console.warn('⚠️  totalBoletos inválido en configuración actual, usando fallback');
             config.rifa.totalBoletos = 250000;
         }
-        if (!config.rifa.precioBoleto || isNaN(config.rifa.precioBoleto) || config.rifa.precioBoleto <= 0) {
-            console.warn('⚠️  precioBoleto inválido en config.json, usando fallback');
+        const precioConfig = Number(config.rifa.precioBoleto);
+        if (!Number.isFinite(precioConfig) || precioConfig < 0) {
+            console.warn('⚠️  precioBoleto inválido en configuración actual, usando fallback');
             config.rifa.precioBoleto = 100;
         }
         
-        // Combinar datos de config.json con estructura esperada
+        // Combinar datos actuales con la estructura esperada por frontend
         const clienteData = {
             cliente: config.cliente || {},
             rifa: config.rifa || {},
@@ -7059,13 +7631,18 @@ app.get('/api/cliente', (req, res) => {
             tema: normalizarTemaConfig(config.tema || {})
         };
         
-        res.json({
+        const payload = {
             success: true,
             data: clienteData
-        });
+        };
+
+        serverCache.clienteConfigCached = payload;
+        serverCache.clienteConfigCachedTime = Date.now();
+
+        res.json(payload);
     } catch (error) {
         console.error('GET /api/cliente error:', error);
-        // Fallback a cliente-config.js si falla lectura de config.json
+        // Fallback a cliente-config.js si falla lectura de configuración actual
         try {
             res.json({
                 success: true,
@@ -7386,7 +7963,7 @@ app.post('/api/boletos/init-dev', async (req, res) => {
             });
         }
 
-        // ⭐ DINÁMICO: Leer totalBoletos del config.js o del request body
+        // ⭐ DINÁMICO: Leer totalBoletos desde la configuración actual o del request body
         const configSorteo = cargarConfigSorteo();
         let TOTAL = parseInt(req.body.totalBoletos) || configSorteo.totalBoletos;
         
@@ -7487,7 +8064,7 @@ app.post('/api/boletos/init-dev', async (req, res) => {
  * Crea boletos en la BD (ejecutar una sola vez)
  * REQUIERE autenticación admin
  * ⚠️ LENTO: Tarda ~ minutos la primera vez
- * ✅ DINÁMICO: Lee totalBoletos desde config.js
+ * ✅ DINÁMICO: Lee totalBoletos desde la configuración actual
  */
 app.post('/api/boletos/inicializar', verificarToken, async (req, res) => {
     try {
@@ -7914,11 +8491,31 @@ server.listen(PORT, () => {
 // Esto permite que el servidor responda inmediatamente
 setImmediate(async () => {
     try {
+        // 🟦 NUEVO: Inicializar ConfigManagerV2 para persistencia en BD
+        console.log('\n🟦 Inicializando persistencia de configuración en Supabase...');
+        configManagerV2 = new ConfigManagerV2(db);
+        const inicializado = await configManagerV2.inicializar();
+        if (inicializado) {
+            sincronizarConfigLegacyEnMemoria(configManagerV2.getConfig());
+            console.log('✅ ConfigManagerV2 listo - Configuración será persistente en BD');
+        } else {
+            console.log('⚠️  ConfigManagerV2 inicializado en fallback (config.json)');
+        }
+        console.log(`   Info: ${JSON.stringify(configManagerV2.getInfo())}\n`);
+    } catch (err) {
+        console.error('⚠️  Error inicializando ConfigManagerV2:', err.message);
+        console.log('   El sistema seguirá funcionando con config.json\n');
+    }
+
+    try {
         // Asegurar que exista tabla de oportunidades y constraints
         await asegurarTablaOportunidades();
         
         // Iniciar servicio de expiración de órdenes
-        ordenExpirationService.iniciar(INTERVALO_LIMPIEZA_MINUTOS, TIEMPO_APARTADO_HORAS);
+        const configActual = obtenerConfigActual();
+        const tiempoApartadoActual = Number(configActual?.rifa?.tiempoApartadoHoras) || TIEMPO_APARTADO_HORAS;
+        const intervaloLimpiezaActual = Number(configActual?.rifa?.intervaloLimpiezaMinutos) || INTERVALO_LIMPIEZA_MINUTOS;
+        ordenExpirationService.iniciar(intervaloLimpiezaActual, tiempoApartadoActual);
     } catch (e) {
         console.error('❌ Error en inicialización de background:', e.message);
     }

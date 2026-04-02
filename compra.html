@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://127.0.0.1:* http://localhost:* https://gorgeous-heliotrope-5a6b8e.netlify.app http://localhost:5001 https://sadev-rifapiloto-production.up.railway.app; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://fonts.googleapis.com http://localhost:5001 http://127.0.0.1:5001 https://sadev-rifapiloto-production.up.railway.app; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' http://127.0.0.1:* http://localhost:* https: http://localhost:5001 http://127.0.0.1:5001 https://gorgeous-heliotrope-5a6b8e.netlify.app https://sadev-rifapiloto-production.up.railway.app ws: wss: ws://localhost:5001 wss://localhost:5001 ws://127.0.0.1:5001 wss://127.0.0.1:5001 wss://sadev-rifapiloto-production.up.railway.app ws://sadev-rifapiloto-production.up.railway.app; img-src 'self' data: https:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://127.0.0.1:* http://localhost:* http://localhost:5001; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://fonts.googleapis.com http://localhost:5001 http://127.0.0.1:5001; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' http://127.0.0.1:* http://localhost:* https: http://localhost:5001 http://127.0.0.1:5001 ws: wss: ws://localhost:5001 wss://localhost:5001 ws://127.0.0.1:5001 wss://127.0.0.1:5001; img-src 'self' data: https:;">
     <!-- METADATOS DINÁMICOS - Inyectados por js/meta-inyector.js desde config.js -->
     <title>Comprar Boletos - Sorteos Torres</title>
-    <link rel="stylesheet" href="css/styles.css?v=20260219">
+    <link rel="stylesheet" href="css/styles.css?v=20260401.3">
     <script>
         (function() {
             const cachedLogo = localStorage.getItem('rifaplus_cached_logo') || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 96'%3E%3Crect width='240' height='96' rx='20' fill='%230b2235'/%3E%3Ctext x='120' y='58' font-size='34' text-anchor='middle' fill='%23ffffff' font-family='Arial,sans-serif'%3ESaDev%3C/text%3E%3C/svg%3E";
@@ -59,11 +59,30 @@
     <script defer src="js/modal-orden-confirmada.js"></script>
     <script defer src="js/orden-formal.js?v=20260329.1"></script>
     <script defer src="js/modal-contacto.js?v=20260329.2"></script>
-    <script defer src="js/btn-flotante-animator.js"></script>
+    <script defer>
+        (function cargarAnimadorBotonFlotanteEnSegundoPlano() {
+            function loadAnimator() {
+                if (document.querySelector('script[data-rifaplus-animator]')) return;
+                const script = document.createElement('script');
+                script.src = 'js/btn-flotante-animator.js';
+                script.defer = true;
+                script.dataset.rifaplusAnimator = 'true';
+                document.head.appendChild(script);
+            }
+
+            const idle = window.requestIdleCallback || function(cb) {
+                return setTimeout(cb, 1000);
+            };
+
+            window.addEventListener('load', function() {
+                idle(loadAnimator, { timeout: 1800 });
+            }, { once: true });
+        })();
+    </script>
 
     <script defer src="js/modal-conflicto-boletos.js?v=20260219"></script>
 </head>
-<body id="compra-page">
+<body id="compra-page" data-rifaplus-socket="true" data-rifaplus-live-state="true" data-rifaplus-warm-range="true">
     <!-- HEADER CON MENÚ -->
     <header class="header">
         <div class="container">
@@ -244,22 +263,11 @@
                 // Esto asegura que siempre obtenemos el valor actual de config.json
                 let precioBoletoDelServidor = null;
                 try {
-                    const apiBase = window.rifaplusConfig?.backend?.apiBase
-                        || window.rifaplusConfig?.obtenerApiBase?.()
-                        || window.location.origin;
-                    console.log('[PROMO] Obteniendo precio del servidor...', apiBase);
-                    const response = await fetch(`${apiBase}/api/public/config`, {
-                        method: 'GET',
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    
-                    if (response.ok) {
-                        const data = await response.json();
-                        precioBoletoDelServidor = data.data?.rifa?.precioBoleto;
-                        console.log('[PROMO] ✅ Precio obtenido DEL SERVIDOR:', precioBoletoDelServidor);
-                    } else {
-                        console.warn('[PROMO] Respuesta del servidor no OK:', response.status);
-                    }
+                    const configPublica = typeof window.rifaplusConfig?.obtenerConfigPublicaCompartida === 'function'
+                        ? await window.rifaplusConfig.obtenerConfigPublicaCompartida()
+                        : null;
+                    precioBoletoDelServidor = configPublica?.rifa?.precioBoleto ?? configPublica?.precioBoleto ?? null;
+                    console.log('[PROMO] ✅ Precio obtenido DE CONFIG PUBLICA:', precioBoletoDelServidor);
                 } catch (err) {
                     console.warn('[PROMO] ⚠️ No se pudo obtener precio del servidor:', err.message);
                 }
@@ -640,7 +648,7 @@
     </section>
 
     <!-- SECCIÓN DE BONOS DE COMPRA -->
-    <section class="bonificaciones-section bonos-compra-section" id="bonosCompraSection" style="display: none;">
+    <section class="bonificaciones-section bonos-compra-section perf-defer-mobile perf-defer-mobile--compact" id="bonosCompraSection" style="display: none;">
         <div class="container">
             <h3 class="bonificaciones-title">Bonos disponibles</h3>
             <div class="bonificaciones-cards bonos-compra-cards" id="bonosCompraCards">
@@ -650,7 +658,7 @@
     </section>
 
     <!-- MÁQUINA DE LA SUERTE -->
-    <section class="maquina-section" id="maquinaCard">
+    <section class="maquina-section perf-defer-mobile perf-defer-mobile--compact" id="maquinaCard">
         <div class="container">
             <div class="maquina-card">
                 <div class="maquina-header">
@@ -666,7 +674,7 @@
                             <input type="number" id="cantidadNumeros" placeholder="0" min="0" max="500" step="1" inputmode="numeric" class="number-input">
                             <button type="button" class="number-btn" id="aumentarCantidad">+</button>
                         </div>
-                        <small id="maquinaLimiteHint" class="form-helper" style="display:block; margin-top:0.5rem;">Puedes generar hasta 500 boletos por intento.</small>
+                        <small id="maquinaLimiteHint" class="form-helper" style="display:block; margin-top:0.5rem;">Puedes generar hasta 500 boletos por ronda.</small>
                     </div>
 
                     <div class="total-section">
@@ -677,7 +685,7 @@
                     <button class="btn btn-primary btn-generar" id="btnGenerarNumeros" disabled>
                         GENERAR NÚMEROS
                     </button>
-                    <div class="availability-note" id="availabilityNote" style="display:none;">Cargando disponibilidad...</div>
+                    <div class="availability-note" id="availabilityNote" style="visibility:hidden; opacity:0;">Cargando disponibilidad...</div>
                     
                     <script>
                         // 🔧 FALLBACK INMEDIATO: Actualizar disponibilidad desde config.js
@@ -690,7 +698,8 @@
                                 if (availNote && config && config.estado && config.estado.boletosDisponibles !== undefined) {
                                     const disponibles = config.estado.boletosDisponibles;
                                     availNote.textContent = `${disponibles} boletos disponibles`;
-                                    availNote.style.display = 'inline-block';
+                                    availNote.style.visibility = 'visible';
+                                    availNote.style.opacity = '1';
                                     console.log('✅ [Compra] Disponibilidad actualizada desde config.js:', disponibles);
                                 }
                             };
@@ -733,28 +742,53 @@
     </section>
 
     <!-- SELECCIONA TU BOLETO -->
-    <section class="seleccion-section">
+    <section class="seleccion-section perf-defer-mobile perf-defer-mobile--large">
         <div class="container">
             <h3 class="section-title">Selecciona el boleto de tu preferencia</h3>
 
             <!-- BARRA DE BÚSQUEDA DE BOLETOS -->
             <div class="busqueda-boletos-card">
                 <div class="busqueda-input-group">
-                    <label for="busquedaBoleto" class="busqueda-label">Buscar boleto por número:</label>
-                    <div class="busqueda-wrapper">
+                    <div class="busqueda-toolbar" id="busquedaToolbarAvanzada" hidden>
+                        <div class="busqueda-toolbar-field">
+                            <label for="busquedaModo" class="busqueda-mini-label">Tipo de búsqueda</label>
+                            <select id="busquedaModo" class="busqueda-select" aria-label="Tipo de búsqueda de boletos">
+                                <option value="exacto">Número exacto</option>
+                                <option value="empieza">Empieza con</option>
+                                <option value="termina">Termina con</option>
+                                <option value="contiene">Contiene</option>
+                                <option value="rango">Rango</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <label for="busquedaBoleto" class="busqueda-label" id="busquedaLabelPrincipal">Buscar boleto por número:</label>
+                    <div class="busqueda-wrapper" id="busquedaWrapperPrincipal">
                         <span class="busqueda-input-icon" aria-hidden="true"><i class="fas fa-search"></i></span>
                         <input 
-                            type="number" 
+                            type="text"
+                            inputmode="numeric"
+                            pattern="[0-9]*"
                             id="busquedaBoleto" 
                             class="busqueda-input" 
                             placeholder="Ej. 42" 
-                            min="0"
                             aria-label="Buscar boleto por número"
+                        >
+                        <input 
+                            type="text"
+                            inputmode="numeric"
+                            pattern="[0-9]*"
+                            id="busquedaBoletoFin"
+                            class="busqueda-input busqueda-input-secundario"
+                            placeholder="Hasta"
+                            aria-label="Fin del rango de búsqueda"
+                            hidden
                         >
                         <button type="button" id="btnBuscarBoleto" class="btn btn-search">
                             Buscar
                         </button>
                     </div>
+                    <p class="busqueda-helper-text" id="busquedaHelperText">Escribe un número exacto para ir directo a ese boleto.</p>
                     <p class="busqueda-rango">Rango de boletos: <span id="rangoInicio">0</span> - <span id="rangoTotal">999</span></p>
                     <p class="busqueda-feedback" id="busquedaFeedback" aria-live="polite"></p>
                 </div>
@@ -797,6 +831,7 @@
                     <span class="switch-slider"></span>
                 </label>
             </div>
+            <div class="busqueda-grid-toolbar" id="busquedaGridToolbar" style="display: none;"></div>
 
             <!-- Texto instructivo y botones de rango -->
             <div class="instruccion-rango">
@@ -814,6 +849,7 @@
                 </div>
                 <div class="numeros-grid" id="numerosGrid" data-loading="true"></div>
                 <div id="infiniteScrollSentinel"></div>
+                <div id="busquedaLoadMoreFooter" class="busqueda-load-more-footer" hidden></div>
             </div>
             <style>
                 @keyframes spin {
@@ -1192,7 +1228,7 @@
     <script src="js/environment-config.js"></script>
     <!-- 🔌 Socket.io para actualizaciones en tiempo real (carga dinámicamente desde el backend) -->
     <script src="js/socket-handler.js"></script>
-    <script defer src="js/compra.js?v=20260332"></script>
+    <script defer src="js/compra.js?v=20260401.4"></script>
     <!-- ✅ Inicialización tardía (después de que todos los defer completen) -->
     <script defer src="js/carrito-init.js"></script>
 

@@ -1,0 +1,452 @@
+{
+  "seo": {
+    "autor": "SaDev",
+    "image": "https://res.cloudinary.com/dxu3imvxt/image/upload/v1773361553/rifaplus/sorteos/qxvschbvl2sslhitqpsi.png",
+    "title": "Desayuno completo 🥙🍳 + Bebida 🥤 - Cafetería Campus 2 | SaDev",
+    "author": "SaDev",
+    "imagen": "https://res.cloudinary.com/dxu3imvxt/image/upload/v1773361553/rifaplus/sorteos/qxvschbvl2sslhitqpsi.png",
+    "titulo": "Desayuno completo 🥙🍳 + Bebida 🥤 - Cafetería Campus 2 | SaDev",
+    "twitter": {
+      "card": "summary_large_image",
+      "imagen": "https://res.cloudinary.com/dxu3imvxt/image/upload/v1773361553/rifaplus/sorteos/qxvschbvl2sslhitqpsi.png",
+      "titulo": "Desayuno completo 🥙🍳 + Bebida 🥤 - Cafetería Campus 2 | SaDev",
+      "creador": "",
+      "descripcion": "Participa en nuestra rifa piloto por tan solo 0 pesos, agradecemos tu participacion"
+    },
+    "urlBase": "",
+    "keywords": "sorteo, rifa, SUPERCOMBO PARA TODOS, SORTEOS LOPEZ",
+    "openGraph": {
+      "tipo": "website",
+      "imagen": "https://res.cloudinary.com/dxu3imvxt/image/upload/v1773361553/rifaplus/sorteos/qxvschbvl2sslhitqpsi.png",
+      "locale": "es_MX",
+      "titulo": "Desayuno completo 🥙🍳 + Bebida 🥤 - Cafetería Campus 2 | SaDev",
+      "descripcion": "Participa en nuestra rifa piloto por tan solo 0 pesos, agradecemos tu participacion"
+    },
+    "descripcion": "Participa en nuestra rifa piloto por tan solo 0 pesos, agradecemos tu participacion",
+    "description": "Participa en nuestra rifa piloto por tan solo 0 pesos, agradecemos tu participacion",
+    "palabrasLlave": "sorteo, rifa, SUPERCOMBO PARA TODOS, SORTEOS LOPEZ"
+  },
+  "rifa": {
+    "ayuda": {
+      "preguntasFrecuentes": [
+        {
+          "pregunta": "¿Cómo sé que mi pago fue confirmado?",
+          "respuesta": "Después de subir tu comprobante, el administrador lo revisará en máximo 24 horas.\n\nTu orden pasará a estado \"Confirmada\" en \"Mis Boletos\". No necesitas esperar notificación: verifica directamente en la web que tu comprobante fue validado."
+        },
+        {
+          "pregunta": "¿Qué pasa si no se llega al porcentaje de ventas para su realización?",
+          "respuesta": "El sorteo se pospondrá, y se actualizara la nueva checha de realizacion en la web y se anunciara en todas nuestras redes sociales"
+        }
+      ]
+    },
+    "bonos": {
+      "enabled": true,
+      "items": [
+        {
+          "emoji": "🔥",
+          "titulo": "$10,000 pesos adicionales ",
+          "descripcion": "Si resultas ganador del primer o segundo lugar y nos sigues en al menos una red social eres acreedor a este bono",
+          "accion": "ninguna"
+        },
+        {
+          "emoji": "📱",
+          "titulo": "Iphone 17 Pro Max",
+          "descripcion": "Si compras mas de 500 boletos y resultas ganador del primer lugar del sorteo, eres acreedor a este bono (Los boletos son acumulables).",
+          "accion": "ninguna"
+        }
+      ]
+    },
+    "estado": "activo",
+    "rangos": [
+      {
+        "inicio": 0,
+        "fin": 99999,
+        "nombre": "0 - 100k"
+      },
+      {
+        "inicio": 100000,
+        "fin": 199999,
+        "nombre": "100k - 200k"
+      },
+      {
+        "inicio": 200000,
+        "fin": 299999,
+        "nombre": "200k - 300k"
+      },
+      {
+        "inicio": 300000,
+        "fin": 399999,
+        "nombre": "300k - 400k"
+      },
+      {
+        "inicio": 400000,
+        "fin": 499999,
+        "nombre": "400k - 500k"
+      },
+      {
+        "inicio": 500000,
+        "fin": 599999,
+        "nombre": "500k - 600k"
+      },
+      {
+        "inicio": 600000,
+        "fin": 699999,
+        "nombre": "600k - 700k"
+      },
+      {
+        "inicio": 700000,
+        "fin": 799999,
+        "nombre": "700k - 800k"
+      },
+      {
+        "inicio": 800000,
+        "fin": 899999,
+        "nombre": "800k - 900k"
+      },
+      {
+        "inicio": 900000,
+        "fin": 999999,
+        "nombre": "900k - 1M"
+      }
+    ],
+    "galeria": {
+      "enabled": true,
+      "imagenes": [
+        {
+          "url": "https://res.cloudinary.com/dxu3imvxt/image/upload/v1775083357/rifaplus/sorteos/ouezxdckffyp4rqjxhsy.png",
+          "titulo": "Imagen 1",
+          "descripcion": "",
+          "publicId": "rifaplus/sorteos/ouezxdckffyp4rqjxhsy"
+        },
+        {
+          "url": "https://res.cloudinary.com/dxu3imvxt/image/upload/v1775083365/rifaplus/sorteos/yc3nvhwjwmmbdznplr0a.png",
+          "titulo": "Imagen 2",
+          "descripcion": "",
+          "publicId": "rifaplus/sorteos/yc3nvhwjwmmbdznplr0a"
+        },
+        {
+          "url": "https://res.cloudinary.com/dxu3imvxt/image/upload/v1775083388/rifaplus/sorteos/s75q2j5q36eyhy0ouvbg.png",
+          "titulo": "Imagen 3",
+          "descripcion": "",
+          "publicId": "rifaplus/sorteos/s75q2j5q36eyhy0ouvbg"
+        }
+      ]
+    },
+    "descuentos": {
+      "reglas": [
+        {
+          "cantidad": 50,
+          "precio": 45,
+          "total": 45,
+          "ahorro": 5
+        },
+        {
+          "cantidad": 100,
+          "precio": 89,
+          "total": 89,
+          "ahorro": 11
+        },
+        {
+          "cantidad": 200,
+          "precio": 170,
+          "total": 170,
+          "ahorro": 30
+        },
+        {
+          "cantidad": 300,
+          "precio": 240,
+          "total": 240,
+          "ahorro": 60
+        },
+        {
+          "cantidad": 400,
+          "precio": 320,
+          "total": 320,
+          "ahorro": 80
+        },
+        {
+          "cantidad": 500,
+          "precio": 400,
+          "total": 400,
+          "ahorro": 100
+        },
+        {
+          "cantidad": 1000,
+          "precio": 750,
+          "total": 750,
+          "ahorro": 250
+        }
+      ],
+      "enabled": true
+    },
+    "horaSorteo": "21:15",
+    "bonosCompra": {
+      "items": [
+        {
+          "emoji": "💵",
+          "titulo": "10,000 Adicionales",
+          "descripcion": "Para ser acreedor al bono adicional, debes seguirnos en al menos una de nuestras redes sociales oficiales."
+        },
+        {
+          "emoji": "📱",
+          "titulo": "Iphone 17 Pro Max",
+          "descripcion": "Recuerda que para ser acreedor a este bono debes de comprar al menos 500 boletos, si acumulables"
+        }
+      ],
+      "enabled": true
+    },
+    "descripcion": "Este es un Sorteo ficticio para Demo de la Web con 1M de boletos y promociones por Volumen",
+    "fechaSorteo": "2026-04-30T21:15:00",
+    "publicacion": {
+      "bonos": true,
+      "promociones": true,
+      "testimonios": false,
+      "ruletazo": true,
+      "presorteo": true,
+      "progressStats": true
+    },
+    "zonaHoraria": "Hora Centro México",
+    "nombreSorteo": "500K por solo $1.00 Peso 💰🤯",
+    "precioBoleto": 1,
+    "totalBoletos": 1000000,
+    "edicionNombre": "Sorteo Demo - 1M",
+    "horaPresorteo": "",
+    "maquinaSuerte": {
+      "limiteBoletos": 1000
+    },
+    "oportunidades": {
+      "enabled": false,
+      "multiplicador": 3,
+      "rango_visible": false,
+      "rango_oculto": null
+    },
+    "fechaPresorteo": null,
+    "sistemaPremios": {
+      "enabled": true,
+      "mensaje": "Múltiples oportunidades de ganar premios extraordinarios",
+      "sorteo": [
+        {
+          "posicion": 1,
+          "nombre": "Primer Lugar",
+          "premio": "$500,000 Pesos en efectivo",
+          "descripcion": "💰",
+          "icono": "🥇"
+        },
+        {
+          "posicion": 2,
+          "nombre": "Segundo Lugar",
+          "premio": "$20,000 Pesos en efectivo",
+          "descripcion": "💵",
+          "icono": "🎁"
+        }
+      ],
+      "presorteo": [],
+      "ruletazos": [
+        {
+          "posicion": 1,
+          "nombre": "Ruletazo 1",
+          "premio": "Ruletazos de Mil pesos cada uno",
+          "descripcion": "El dia del Sorteo se regelaran 5 ruletazos",
+          "icono": "🎰"
+        },
+        {
+          "posicion": 2,
+          "nombre": "Ruletazo 2",
+          "premio": "Ruletazos de Mil pesos cada uno",
+          "descripcion": "El dia del Sorteo se regelaran 5 ruletazos",
+          "icono": "🎰"
+        },
+        {
+          "posicion": 3,
+          "nombre": "Ruletazo 3",
+          "premio": "Ruletazos de Mil pesos cada uno",
+          "descripcion": "El dia del Sorteo se regelaran 5 ruletazos",
+          "icono": "🎰"
+        },
+        {
+          "posicion": 4,
+          "nombre": "Ruletazo 4",
+          "premio": "Ruletazos de Mil pesos cada uno",
+          "descripcion": "El dia del Sorteo se regelaran 5 ruletazos",
+          "icono": "🎰"
+        },
+        {
+          "posicion": 5,
+          "nombre": "Ruletazo 5",
+          "premio": "Ruletazos de Mil pesos cada uno",
+          "descripcion": "El dia del Sorteo se regelaran 5 ruletazos",
+          "icono": "🎰"
+        }
+      ]
+    },
+    "modalidadSorteo": "Transmisión en Vivo por Facebook",
+    "informacionSorteo": [
+      {
+        "titulo": "El sorteo se llevara a cabo",
+        "descripcion": "El día 16 de abril del 2026, a las 9:00 am, por lo que el sorteo se cerrara 20 minutos antes de esta hora y solo participaran los boletos comprados antes de esa hora"
+      },
+      {
+        "titulo": "Elección del ganador ",
+        "descripcion": "El Ganador será elegido al azar, mediante un ruletazo en esta misma web, al ganador se le notificara por medio del whatsapp registrado en su orden de compra, ademas también, podrán ver el ganador en esta web, al finalizar el sorteo será visible el numero del boleto ganador."
+      },
+      {
+        "titulo": "Bono del sorteo",
+        "descripcion": "El bono consiste en una bebida des su preferencia de la cafetería campus 2, solo podrás acceder a este bono si resultas ganador y sigues alguna de nuestras redes sociales."
+      },
+      {
+        "titulo": "Maximo de boletos por persona",
+        "descripcion": "Solo podrás adquirir un máximo de 5 boletos por persona, ordenes con un número mayor de boletos se descartan automáticamente "
+      }
+    ],
+    "fechaSorteoFormato": "30 de Abril del 2026",
+    "promocionPorTiempo": {
+      "enabled": false,
+      "fechaFin": null,
+      "fechaInicio": null,
+      "precioProvisional": null
+    },
+    "descuentoPorcentaje": {
+      "enabled": false,
+      "fechaFin": "2026-03-31T22:00",
+      "porcentaje": 100,
+      "fechaInicio": "2026-03-31T19:03"
+    },
+    "tiempoApartadoHoras": 1,
+    "fechaPresorteoFormato": "",
+    "informacionSorteoIntro": "Este es nuestro primer sorteo en la plataforma y queremos invitarte a ser parte de este inicio. La participación es totalmente gratuita, pero si deseas apoyarnos y ayudarnos a impulsar este proyecto, puedes adquirir tu boleto y acompañarnos en esta primera etapa.",
+    "intervaloLimpiezaMinutos": 10,
+    "promocionesOportunidades": {
+      "enabled": true,
+      "ejemplos": []
+    }
+  },
+  "tema": {
+    "preset": "dorado",
+    "colores": {
+      "colorPrimario": "#d4a017",
+      "colorSecundario": "#3f2d14",
+      "colorAccento": "#3f2d14",
+      "colorFondo": "#f7efe0",
+      "colorSuperficie": "#f7efe0",
+      "colorTexto": "#0f172a",
+      "colorTextoSecundario": "#707276",
+      "primary": "#d4a017",
+      "primaryDark": "#a57d12",
+      "primaryLight": "#f1e1bc",
+      "secondary": "#3f2d14",
+      "success": "#16a34a",
+      "danger": "#dc2626",
+      "textDark": "#0f172a",
+      "textLight": "#707276",
+      "bgLight": "#f7efe0",
+      "bgWhite": "#f7efe0",
+      "borderColor": "#d2ccc3"
+    },
+    "colorFondo": "#f7efe0",
+    "colorTexto": "#0f172a",
+    "colorAcento": "#3f2d14",
+    "colorPrimario": "#d4a017",
+    "personalizado": false,
+    "colorSuperficie": "#f7efe0"
+  },
+  "cache": {
+    "policies": {
+      "adminStats": 300,
+      "oportunidades": 900,
+      "publicBoletos": 600,
+      "ordenesCliente": 120
+    },
+    "ttlSeconds": 300,
+    "enableRedis": false
+  },
+  "server": {
+    "port": 5001,
+    "trustProxy": true,
+    "compression": true
+  },
+  "cliente": {
+    "id": "SaDev",
+    "logo": "https://res.cloudinary.com/dxu3imvxt/image/upload/v1774673215/rifaplus/sorteos/qzfjmawh4hhknsi64p1k.png",
+    "email": "joseayairlp12@gmail.com",
+    "nombre": "SaDev",
+    "eslogan": "Desarrollando sueños, creando realidades",
+    "logotipo": "https://res.cloudinary.com/dxu3imvxt/image/upload/v1774673215/rifaplus/sorteos/qzfjmawh4hhknsi64p1k.png",
+    "telefono": "+524591109088",
+    "prefijoOrden": "SS",
+    "redesSociales": {
+      "tiktok": "",
+      "facebook": "https://www.facebook.com/profile.php?id=100008315310869&locale=es_LA",
+      "whatsapp": "+524591076909",
+      "instagram": "https://www.instagram.com/joseayair",
+      "canalWhatsapp": "https://chat.whatsapp.com/grupo-sorteos",
+      "facebookUsuario": "Ayair",
+      "instagramUsuario": "@joseayair",
+      "canalWhatsappNombre": "Sorteos Yepe"
+    },
+    "imagenPrincipal": "https://res.cloudinary.com/dxu3imvxt/image/upload/v1775083402/rifaplus/sorteos/n0smmhjzorb4bxuwx78z.png",
+    "mensajesWhatsapp": {
+      "confirmacion": "",
+      "rechazo": "",
+      "recordatorio": "",
+      "ganador": ""
+    }
+  },
+  "tecnica": {
+    "bankAccounts": [
+      {
+        "id": 1,
+        "phone": "",
+        "accountType": "Tarjeta",
+        "beneficiary": "Jose Luis Yepez Garcia",
+        "nombreBanco": "SANTANDER",
+        "paymentType": "transferencia",
+        "accountNumber": "4456 1267 8989 1156",
+        "numero_referencia": ""
+      },
+      {
+        "id": 2,
+        "phone": "",
+        "accountType": "Tarjeta",
+        "beneficiary": "Jose Ayair Lopez Perez",
+        "nombreBanco": "BBVA",
+        "paymentType": "transferencia",
+        "accountNumber": "4589 1290 4589 3210",
+        "numero_referencia": ""
+      },
+      {
+        "id": 3,
+        "phone": "",
+        "accountType": "Tarjeta",
+        "beneficiary": "José Ayair LP",
+        "nombreBanco": "NU-MEXICO",
+        "paymentType": "efectivo",
+        "accountNumber": "3412 5679 4512 5632",
+        "numero_referencia": "Tú numero de orden o Nombre completo"
+      }
+    ]
+  },
+  "database": {
+    "pool": {
+      "max": 5,
+      "min": 1,
+      "idleTimeoutMillis": 15000,
+      "reapIntervalMillis": 1000,
+      "acquireTimeoutMillis": 30000
+    },
+    "queryTimeout": 30000
+  },
+  "rate_limits": {
+    "production": {
+      "login": 5,
+      "general": 100,
+      "ordenes": 10,
+      "windowMs": 900000
+    },
+    "development": {
+      "login": 1000,
+      "general": 10000,
+      "ordenes": 1000,
+      "windowMs": 900000
+    }
+  }
+}

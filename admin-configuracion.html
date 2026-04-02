@@ -2350,6 +2350,7 @@
                 </div>
                 <div class="section-quicknav">
                     <button class="quicknav-btn" type="button" onclick="irAConfigBloque('sorteo', 'card-sorteo-general')"><i class="fas fa-pen"></i> Información general</button>
+                    <button class="quicknav-btn" type="button" onclick="irAConfigBloque('sorteo', 'card-sorteo-boletaje')"><i class="fas fa-hashtag"></i> Boletaje y rangos</button>
                     <button class="quicknav-btn" type="button" onclick="irAConfigBloque('sorteo', 'card-sorteo-fechas')"><i class="fas fa-calendar-alt"></i> Fechas y horarios</button>
                     <button class="quicknav-btn" type="button" onclick="irAConfigBloque('sorteo', 'card-sorteo-ganadores')"><i class="fas fa-trophy"></i> Ganadores</button>
                     <button class="quicknav-btn" type="button" onclick="irAConfigBloque('sorteo', 'card-sorteo-informacion')"><i class="fas fa-align-left"></i> Contenido público</button>
@@ -2442,6 +2443,91 @@
                     <div style="border-top: 1px solid #e5e7eb; margin-top: 1.5rem; padding-top: 1.5rem; display: flex; gap: 0.75rem; flex-wrap: wrap;">
                         <button type="button" class="btn btn-success" id="btn-guardar-info-sorteo" onclick="guardarInfoGeneralSorteo()">
                             <i class="fas fa-save"></i> Guardar Cambios
+                        </button>
+                    </div>
+                </div>
+
+                <div class="config-card" id="card-sorteo-boletaje">
+                    <div class="section-subheader">
+                        <i class="fas fa-hashtag"></i> Boletaje y Rangos
+                    </div>
+                    <p style="color: var(--text-light); font-size: 0.9rem; margin-bottom: var(--spacing-lg);">
+                        Define el total de boletos del sorteo, los rangos públicos de compra y, si usas oportunidades, el rango visible y oculto.
+                    </p>
+
+                    <div class="form-group-single">
+                        <label class="form-label">Total de boletos <span class="required">*</span></label>
+                        <input type="number" class="form-input" id="sorteo-total-boletos" min="1" max="10000000" step="1" placeholder="Ej: 1000000">
+                        <div class="form-helper">Este valor debe coincidir con la escala real del sorteo. Si ya tienes los boletos inicializados en BD, aquí defines el universo activo.</div>
+                    </div>
+
+                    <div style="margin-top: var(--spacing-xl); display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+                        <div class="form-group-single" style="margin: 0;">
+                            <label class="form-label">Tiempo de apartado <span class="required">*</span></label>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <input type="number" class="form-input" id="tiempo-apartado-horas" min="0.5" step="0.5" required style="flex: 1;">
+                                <span style="color: #6B7280; font-size: 0.95rem;">horas</span>
+                            </div>
+                            <div class="form-helper">Tiempo máximo que un boleto permanece apartado sin pago antes de liberarse.</div>
+                        </div>
+
+                        <div class="form-group-single" style="margin: 0;">
+                            <label class="form-label" for="maquina-suerte-limite">Máximo de boletos por intento</label>
+                            <input type="number" class="form-input" id="maquina-suerte-limite" min="1" step="1" placeholder="500">
+                            <div class="form-helper" id="maquina-suerte-limite-help">La máquina podrá generar hasta 500 boletos por intento.</div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: var(--spacing-xl); padding: 1rem 1.1rem; border: 1px solid #e5e7eb; border-radius: 14px; background: #f8fafc;">
+                        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+                            <div style="min-width: 240px; flex: 1;">
+                                <label class="form-label" style="margin-bottom: 0.35rem;">Búsqueda avanzada de boletos</label>
+                                <div class="form-helper" style="margin: 0;">
+                                    Actívala para rifas grandes. En compra aparecerán opciones claras como exacto, empieza con, termina con, contiene y rango. Si la dejas apagada, la barra seguirá simple como hasta ahora.
+                                </div>
+                            </div>
+                            <label class="toggle-label" for="busqueda-boletos-modo-avanzado" style="margin: 0;">
+                                <input type="checkbox" class="toggle-input" id="busqueda-boletos-modo-avanzado">
+                                <span class="toggle-bg"></span>
+                                <span class="toggle-circle"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: var(--spacing-xl);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+                            <label class="form-label" style="margin: 0;">Rangos públicos de compra</label>
+                            <button type="button" class="btn btn-secondary" id="btn-agregar-rango-publico">
+                                <i class="fas fa-plus"></i> Agregar rango
+                            </button>
+                        </div>
+                        <div id="rangos-publicos-lista" style="display: grid; gap: 0.75rem;"></div>
+                        <div class="form-helper">Cada rango define qué números se muestran como bloques comprables en la interfaz pública.</div>
+                    </div>
+
+                    <div style="margin-top: var(--spacing-xl); display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+                        <div>
+                            <label class="form-label">Rango visible de oportunidades</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                                <input type="number" class="form-input" id="oportunidades-rango-visible-inicio" min="0" step="1" placeholder="Inicio">
+                                <input type="number" class="form-input" id="oportunidades-rango-visible-fin" min="0" step="1" placeholder="Fin">
+                            </div>
+                            <div class="form-helper">Si está vacío, la compra usa los rangos públicos normales.</div>
+                        </div>
+
+                        <div>
+                            <label class="form-label">Rango oculto de oportunidades</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                                <input type="number" class="form-input" id="oportunidades-rango-oculto-inicio" min="0" step="1" placeholder="Inicio">
+                                <input type="number" class="form-input" id="oportunidades-rango-oculto-fin" min="0" step="1" placeholder="Fin">
+                            </div>
+                            <div class="form-helper">Útil si manejas oportunidades fuera del rango visible principal.</div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions" style="margin-top: 1.5rem;">
+                        <button type="button" class="btn btn-primary" id="btn-guardar-boletaje-rangos">
+                            <i class="fas fa-save"></i> Guardar Boletaje y Rangos
                         </button>
                     </div>
                 </div>
@@ -2544,20 +2630,6 @@
                             <div class="form-group-single">
                                 <label class="form-label">Hora de Presorteo</label>
                                 <input type="time" class="form-input" id="sorteo-hora-presorteo">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- TIEMPO DE APARTADO -->
-                    <div style="border-top: 1px solid #e5e7eb; padding-top: 1.5rem; margin-top: 1.5rem;">
-                        <div class="form-group-row">
-                            <div class="form-group-single">
-                                <label class="form-label">Tiempo de Apartado <span class="required">*</span></label>
-                                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                    <input type="number" class="form-input" id="tiempo-apartado-horas" min="0.5" step="0.5" required style="flex: 1;">
-                                    <span style="color: #6B7280; font-size: 0.95rem;">horas</span>
-                                </div>
-                                <small style="color: #9CA3AF; font-size: 0.85rem; margin-top: 0.25rem; display: block;">Tiempo máximo que un boleto permanece apartado sin pago antes de liberarse</small>
                             </div>
                         </div>
                     </div>
@@ -2669,29 +2741,6 @@
                     <div class="form-actions" style="margin-top: 1.5rem;">
                         <button class="btn btn-primary" id="btn-guardar-bonos-compra">
                             <i class="fas fa-save"></i> Guardar Bonos de Compra
-                        </button>
-                    </div>
-                </div>
-
-                <div class="config-card" id="card-sorteo-maquina-suerte" style="margin-top: var(--spacing-2xl);">
-                    <div class="section-subheader">
-                        <i class="fas fa-dice"></i> Limite de la maquina de la suerte
-                    </div>
-                    <p style="color: var(--text-light); font-size: 0.9rem; margin-bottom: var(--spacing-lg);">
-                        Define cuántos boletos como máximo puede generar la máquina por intento. La página respetará este tope automáticamente y también lo ajustará si el rango comprable real es menor.
-                    </p>
-
-                    <div style="display:grid; gap: 1rem;">
-                        <div class="form-group-single">
-                            <label class="form-label" for="maquina-suerte-limite">Máximo de boletos por intento</label>
-                            <input type="number" class="form-input" id="maquina-suerte-limite" min="1" step="1" placeholder="500">
-                            <div class="form-helper" id="maquina-suerte-limite-help">La máquina podrá generar hasta 500 boletos por intento.</div>
-                        </div>
-                    </div>
-
-                    <div class="form-actions" style="margin-top: 1.5rem;">
-                        <button class="btn btn-primary" id="btn-guardar-maquina-suerte">
-                            <i class="fas fa-save"></i> Guardar Limite de la Maquina
                         </button>
                     </div>
                 </div>
@@ -3265,6 +3314,83 @@
                     <div class="form-group-single" style="margin-top: var(--spacing-lg);">
                         <label class="form-label">Descripción SEO</label>
                         <textarea class="form-input" id="seo-description" rows="4" placeholder="Explica por qué vale la pena participar, qué se gana y la sensación de confianza que debe proyectar el sorteo."></textarea>
+                    </div>
+
+                    <div class="form-grid-2" style="margin-top: var(--spacing-lg);">
+                        <div class="form-group-single">
+                            <label class="form-label">Autor SEO</label>
+                            <input type="text" class="form-input" id="seo-author" placeholder="Ej: SaDev">
+                        </div>
+                        <div class="form-group-single">
+                            <label class="form-label">Palabras clave</label>
+                            <input type="text" class="form-input" id="seo-keywords" placeholder="Ej: sorteo, rifa, desayuno, cafetería">
+                        </div>
+                    </div>
+
+                    <div class="form-group-single" style="margin-top: var(--spacing-lg);">
+                        <label class="form-label">URL base pública</label>
+                        <input type="text" class="form-input" id="seo-url-base" placeholder="https://tu-dominio.com">
+                        <div class="form-helper">Se usa para canonical, Open Graph y URLs absolutas al compartir.</div>
+                    </div>
+
+                    <div style="margin-top: var(--spacing-xl); padding-top: var(--spacing-lg); border-top: 1px solid var(--divider);">
+                        <div class="section-subheader" style="margin-bottom: 0.85rem;">
+                            <i class="fas fa-share-nodes"></i> Open Graph
+                        </div>
+                        <div class="form-grid-2">
+                            <div class="form-group-single">
+                                <label class="form-label">Título Open Graph</label>
+                                <input type="text" class="form-input" id="seo-og-title" placeholder="Si lo dejas vacío usará el título SEO">
+                            </div>
+                            <div class="form-group-single">
+                                <label class="form-label">Imagen Open Graph</label>
+                                <input type="text" class="form-input" id="seo-og-image" placeholder="Si la dejas vacía usará la imagen SEO">
+                            </div>
+                        </div>
+                        <div class="form-grid-2" style="margin-top: var(--spacing-md);">
+                            <div class="form-group-single">
+                                <label class="form-label">Tipo Open Graph</label>
+                                <input type="text" class="form-input" id="seo-og-type" placeholder="website">
+                            </div>
+                            <div class="form-group-single">
+                                <label class="form-label">Locale Open Graph</label>
+                                <input type="text" class="form-input" id="seo-og-locale" placeholder="es_MX">
+                            </div>
+                        </div>
+                        <div class="form-group-single" style="margin-top: var(--spacing-md);">
+                            <label class="form-label">Descripción Open Graph</label>
+                            <textarea class="form-input" id="seo-og-description" rows="3" placeholder="Si la dejas vacía usará la descripción SEO"></textarea>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: var(--spacing-xl); padding-top: var(--spacing-lg); border-top: 1px solid var(--divider);">
+                        <div class="section-subheader" style="margin-bottom: 0.85rem;">
+                            <i class="fab fa-x-twitter"></i> Twitter Card
+                        </div>
+                        <div class="form-grid-2">
+                            <div class="form-group-single">
+                                <label class="form-label">Tipo de card</label>
+                                <input type="text" class="form-input" id="seo-twitter-card" placeholder="summary_large_image">
+                            </div>
+                            <div class="form-group-single">
+                                <label class="form-label">Creador / @usuario</label>
+                                <input type="text" class="form-input" id="seo-twitter-creator" placeholder="@tucuenta">
+                            </div>
+                        </div>
+                        <div class="form-grid-2" style="margin-top: var(--spacing-md);">
+                            <div class="form-group-single">
+                                <label class="form-label">Título Twitter</label>
+                                <input type="text" class="form-input" id="seo-twitter-title" placeholder="Si lo dejas vacío usará el título SEO">
+                            </div>
+                            <div class="form-group-single">
+                                <label class="form-label">Imagen Twitter</label>
+                                <input type="text" class="form-input" id="seo-twitter-image" placeholder="Si la dejas vacía usará la imagen SEO">
+                            </div>
+                        </div>
+                        <div class="form-group-single" style="margin-top: var(--spacing-md);">
+                            <label class="form-label">Descripción Twitter</label>
+                            <textarea class="form-input" id="seo-twitter-description" rows="3" placeholder="Si la dejas vacía usará la descripción SEO"></textarea>
+                        </div>
                     </div>
                 </div>
 
@@ -3908,7 +4034,24 @@
             seo: {
                 title: '',
                 description: '',
-                image: ''
+                image: '',
+                author: '',
+                keywords: '',
+                urlBase: '',
+                openGraph: {
+                    titulo: '',
+                    descripcion: '',
+                    imagen: '',
+                    tipo: 'website',
+                    locale: 'es_MX'
+                },
+                twitter: {
+                    card: 'summary_large_image',
+                    titulo: '',
+                    descripcion: '',
+                    imagen: '',
+                    creador: ''
+                }
             },
             mensajesWhatsapp: {
                 confirmacion: '',
@@ -4452,6 +4595,8 @@
 
         function poblarFormularioPublicacion() {
             const seo = configuracionPublicacion.seo || {};
+            const seoOg = seo.openGraph || {};
+            const seoTwitter = seo.twitter || {};
             const mensajes = configuracionPublicacion.mensajesWhatsapp || {};
             const publicacion = configuracionPublicacion.publicacion || {};
             const tema = configuracionPublicacion.tema || {};
@@ -4459,6 +4604,19 @@
             document.getElementById('seo-title').value = seo.title || '';
             document.getElementById('seo-description').value = seo.description || '';
             document.getElementById('seo-image').value = seo.image || '';
+            document.getElementById('seo-author').value = seo.author || seo.autor || '';
+            document.getElementById('seo-keywords').value = seo.keywords || seo.palabrasLlave || '';
+            document.getElementById('seo-url-base').value = seo.urlBase || '';
+            document.getElementById('seo-og-title').value = seoOg.titulo || '';
+            document.getElementById('seo-og-description').value = seoOg.descripcion || '';
+            document.getElementById('seo-og-image').value = seoOg.imagen || '';
+            document.getElementById('seo-og-type').value = seoOg.tipo || 'website';
+            document.getElementById('seo-og-locale').value = seoOg.locale || 'es_MX';
+            document.getElementById('seo-twitter-card').value = seoTwitter.card || 'summary_large_image';
+            document.getElementById('seo-twitter-creator').value = seoTwitter.creador || '';
+            document.getElementById('seo-twitter-title').value = seoTwitter.titulo || '';
+            document.getElementById('seo-twitter-description').value = seoTwitter.descripcion || '';
+            document.getElementById('seo-twitter-image').value = seoTwitter.imagen || '';
             document.getElementById('wa-template-confirmacion').value = mensajes.confirmacion || '';
             document.getElementById('wa-template-rechazo').value = mensajes.rechazo || '';
             document.getElementById('wa-template-recordatorio').value = mensajes.recordatorio || '';
@@ -4519,7 +4677,24 @@
                     seo: {
                         title: data.seo?.title || data.seo?.titulo || '',
                         description: data.seo?.description || data.seo?.descripcion || '',
-                        image: data.seo?.image || data.seo?.imagen || data.cliente?.imagenPrincipal || ''
+                        image: data.seo?.image || data.seo?.imagen || data.cliente?.imagenPrincipal || '',
+                        author: data.seo?.author || data.seo?.autor || data.cliente?.nombre || '',
+                        keywords: data.seo?.keywords || data.seo?.palabrasLlave || '',
+                        urlBase: data.seo?.urlBase || '',
+                        openGraph: {
+                            titulo: data.seo?.openGraph?.titulo || '',
+                            descripcion: data.seo?.openGraph?.descripcion || '',
+                            imagen: data.seo?.openGraph?.imagen || '',
+                            tipo: data.seo?.openGraph?.tipo || 'website',
+                            locale: data.seo?.openGraph?.locale || 'es_MX'
+                        },
+                        twitter: {
+                            card: data.seo?.twitter?.card || 'summary_large_image',
+                            titulo: data.seo?.twitter?.titulo || '',
+                            descripcion: data.seo?.twitter?.descripcion || '',
+                            imagen: data.seo?.twitter?.imagen || '',
+                            creador: data.seo?.twitter?.creador || ''
+                        }
                     },
                     mensajesWhatsapp: {
                         confirmacion: data.cliente?.mensajesWhatsapp?.confirmacion || '',
@@ -4575,7 +4750,24 @@
                 seo: {
                     title: document.getElementById('seo-title').value.trim(),
                     description: document.getElementById('seo-description').value.trim(),
-                    image: document.getElementById('seo-image').value.trim()
+                    image: document.getElementById('seo-image').value.trim(),
+                    author: document.getElementById('seo-author').value.trim(),
+                    keywords: document.getElementById('seo-keywords').value.trim(),
+                    urlBase: document.getElementById('seo-url-base').value.trim(),
+                    openGraph: {
+                        titulo: document.getElementById('seo-og-title').value.trim(),
+                        descripcion: document.getElementById('seo-og-description').value.trim(),
+                        imagen: document.getElementById('seo-og-image').value.trim(),
+                        tipo: document.getElementById('seo-og-type').value.trim(),
+                        locale: document.getElementById('seo-og-locale').value.trim()
+                    },
+                    twitter: {
+                        card: document.getElementById('seo-twitter-card').value.trim(),
+                        creador: document.getElementById('seo-twitter-creator').value.trim(),
+                        titulo: document.getElementById('seo-twitter-title').value.trim(),
+                        descripcion: document.getElementById('seo-twitter-description').value.trim(),
+                        imagen: document.getElementById('seo-twitter-image').value.trim()
+                    }
                 },
                 mensajesWhatsapp: {
                     confirmacion: document.getElementById('wa-template-confirmacion').value.trim(),
@@ -5905,13 +6097,17 @@
                 
                 if (result.data?.rifa) {
                     console.log('✅ Info del sorteo cargada desde servidor:', result.data.rifa);
-                    
-                    // Actualizar en memoria también
-                    window.rifaplusConfig.rifa.nombreSorteo = result.data.rifa.nombreSorteo || window.rifaplusConfig.rifa.nombreSorteo;
-                    window.rifaplusConfig.rifa.totalBoletos = result.data.rifa.totalBoletos || window.rifaplusConfig.rifa.totalBoletos;
-                    window.rifaplusConfig.rifa.precioBoleto = result.data.rifa.precioBoleto || window.rifaplusConfig.rifa.precioBoleto;
-                    window.rifaplusConfig.rifa.descripcion = result.data.rifa.descripcion || window.rifaplusConfig.rifa.descripcion;
-                    window.rifaplusConfig.rifa.edicionNombre = result.data.rifa.edicionNombre || window.rifaplusConfig.rifa.edicionNombre;
+
+                    if (!window.rifaplusConfig.rifa) {
+                        window.rifaplusConfig.rifa = {};
+                    }
+
+                    // Actualizar en memoria con merge completo desde servidor
+                    window.rifaplusConfig.rifa = {
+                        ...window.rifaplusConfig.rifa,
+                        ...result.data.rifa
+                    };
+
                     if (result.data.rifa.oportunidades) {
                         window.rifaplusConfig.rifa.oportunidades = {
                             ...(window.rifaplusConfig.rifa.oportunidades || {}),
@@ -5940,11 +6136,19 @@
                     }
 
                     // 🖼️ CARGAR IMAGEN PRINCIPAL
-                    const imagenPrincipal = result.data.cliente?.imagenPrincipal || window.rifaplusConfig?.cliente?.imagenPrincipal || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 675'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23eaf3fb'/%3E%3Cstop offset='1' stop-color='%23d5e6f5'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1200' height='675' fill='url(%23g)'/%3E%3Ctext x='600' y='330' font-size='46' text-anchor='middle' fill='%231b2a38' font-family='Arial,sans-serif'%3EImagen principal del sorteo%3C/text%3E%3Ctext x='600' y='385' font-size='24' text-anchor='middle' fill='%235e7283' font-family='Arial,sans-serif'%3ECarga una imagen o pega una URL%3C/text%3E%3C/svg%3E";
+                    const imagenPrincipal = result.data.cliente?.imagenPrincipal || window.rifaplusConfig?.cliente?.imagenPrincipal || obtenerPlaceholderImagenAdmin();
                     window.rifaplusConfig.cliente.imagenPrincipal = imagenPrincipal;
                     document.getElementById('preview-imagen-principal').src = imagenPrincipal;
                     document.getElementById('sorteo-imagen-principal-url').value = imagenPrincipal;
                     console.log('✅ Imagen principal cargada:', imagenPrincipal);
+
+                    const sanitizacionMedia = sanitizarMediaAdminConfig();
+                    if (sanitizacionMedia.huboGaleriaInvalida || sanitizacionMedia.imagenPrincipalCorregida) {
+                        mostrarAlerta('⚠️ Se detectaron URLs de imagen inválidas y fueron omitidas en la vista previa del admin', 'warning');
+                    }
+
+                    cargarConfiguracionBoletajeYRangos();
+                    guardarValoresOriginaleSorteo();
                     
                     // Renderizar imágenes en el admin si están
                     if (typeof cargarImagenesSorteo === 'function') {
@@ -7016,6 +7220,30 @@
             } else {
                 console.error('❌ btn-guardar-premios NO ENCONTRADO en el DOM');
             }
+
+            document.getElementById('btn-agregar-rango-publico')?.addEventListener('click', () => {
+                const rangosActuales = obtenerRangosPublicosDesdeDOM();
+                rangosActuales.push({
+                    nombre: `Rango ${rangosActuales.length + 1}`,
+                    inicio: 0,
+                    fin: 0
+                });
+                renderizarRangosPublicosEditor(rangosActuales);
+            });
+
+            document.getElementById('rangos-publicos-lista')?.addEventListener('click', (event) => {
+                const botonEliminar = event.target.closest('.rango-publico-eliminar');
+                if (!botonEliminar) return;
+
+                const index = parseInt(botonEliminar.dataset.index, 10);
+                const rangosActuales = obtenerRangosPublicosDesdeDOM();
+                if (Number.isInteger(index) && index >= 0) {
+                    rangosActuales.splice(index, 1);
+                    renderizarRangosPublicosEditor(rangosActuales);
+                }
+            });
+
+            document.getElementById('btn-guardar-boletaje-rangos')?.addEventListener('click', guardarBoletajeYRangos);
             
             // Password
             document.getElementById('btn-cambiar-password')?.addEventListener('click', cambiarPassword);
@@ -7113,6 +7341,10 @@
                     if (data.tipo === 'oportunidades' || data.tipo === 'sincronizacion_backend') {
                         cargarConfiguracionOportunidades();
                         cargarEjemplosOportunidades();
+                    }
+                    if (data.tipo === 'sincronizacion_backend') {
+                        cargarConfiguracionBoletajeYRangos();
+                        guardarValoresOriginaleSorteo();
                     }
                     renderizarAlertasConfiguracion();
                 });
@@ -7234,20 +7466,281 @@
         window.sorteoValoresOriginales = {
             edicion: '',
             nombre: '',
-            descripcion: ''
+            descripcion: '',
+            imagenPrincipal: '',
+            totalBoletos: '',
+            tiempoApartadoHoras: '',
+            maquinaSuerteLimite: '',
+            busquedaBoletosModoAvanzado: 'false',
+            rangos: '[]',
+            rangoVisible: '',
+            rangoOculto: ''
         };
+
+        function normalizarRangoAdmin(rango, fallbackNombre = 'Rango') {
+            const inicio = parseInt(rango?.inicio, 10);
+            const fin = parseInt(rango?.fin, 10);
+            const nombre = String(rango?.nombre || fallbackNombre).trim() || fallbackNombre;
+
+            if (!Number.isInteger(inicio) || !Number.isInteger(fin) || inicio < 0 || fin < inicio) {
+                return null;
+            }
+
+            return { inicio, fin, nombre };
+        }
+
+        function obtenerRangosPublicosDesdeDOM() {
+            return Array.from(document.querySelectorAll('.rango-publico-item')).map((item, index) => {
+                const inicio = item.querySelector('.rango-publico-inicio')?.value;
+                const fin = item.querySelector('.rango-publico-fin')?.value;
+                const nombre = item.querySelector('.rango-publico-nombre')?.value;
+                return normalizarRangoAdmin({ inicio, fin, nombre }, `Rango ${index + 1}`);
+            }).filter(Boolean);
+        }
+
+        function serializarRangoSimpleAdmin(inicioId, finId) {
+            const inicio = document.getElementById(inicioId)?.value;
+            const fin = document.getElementById(finId)?.value;
+            const rango = normalizarRangoAdmin({ inicio, fin }, 'Rango');
+            return rango ? JSON.stringify({ inicio: rango.inicio, fin: rango.fin }) : '';
+        }
+
+        function renderizarRangosPublicosEditor(rangos = []) {
+            const lista = document.getElementById('rangos-publicos-lista');
+            if (!lista) return;
+
+            lista.innerHTML = '';
+            const rangosNormalizados = Array.isArray(rangos)
+                ? rangos.map((rango, index) => normalizarRangoAdmin(rango, `Rango ${index + 1}`)).filter(Boolean)
+                : [];
+
+            if (rangosNormalizados.length === 0) {
+                lista.innerHTML = '<p style="color: #999; text-align: center; padding: 1rem;">Aún no hay rangos configurados. Agrega al menos uno para organizar la compra pública.</p>';
+                return;
+            }
+
+            rangosNormalizados.forEach((rango, index) => {
+                const item = document.createElement('div');
+                item.className = 'rango-publico-item';
+                item.style.cssText = 'display:grid; grid-template-columns: minmax(120px, 1.2fr) repeat(2, minmax(110px, 1fr)) auto; gap:0.75rem; align-items:end; padding:1rem; border:1px solid #e5e7eb; border-radius:12px; background:#fff;';
+                item.innerHTML = `
+                    <div>
+                        <label class="form-label" style="margin-bottom:0.35rem;">Nombre</label>
+                        <input type="text" class="form-input rango-publico-nombre" value="${rango.nombre}" placeholder="Ej: Serie A">
+                    </div>
+                    <div>
+                        <label class="form-label" style="margin-bottom:0.35rem;">Inicio</label>
+                        <input type="number" class="form-input rango-publico-inicio" min="0" step="1" value="${rango.inicio}">
+                    </div>
+                    <div>
+                        <label class="form-label" style="margin-bottom:0.35rem;">Fin</label>
+                        <input type="number" class="form-input rango-publico-fin" min="0" step="1" value="${rango.fin}">
+                    </div>
+                    <button type="button" class="btn btn-secondary rango-publico-eliminar" data-index="${index}" style="white-space:nowrap;">
+                        <i class="fas fa-trash"></i> Quitar
+                    </button>
+                `;
+                lista.appendChild(item);
+            });
+        }
+
+        function cargarConfiguracionBoletajeYRangos() {
+            const rifa = window.rifaplusConfig?.rifa || {};
+            const totalBoletos = Number(rifa.totalBoletos) || '';
+            const tiempoApartadoHoras = Number(rifa.tiempoApartadoHoras) || '';
+            const rangos = Array.isArray(rifa.rangos) ? rifa.rangos : [];
+            const rangoVisible = rifa.oportunidades?.rango_visible || null;
+            const rangoOculto = rifa.oportunidades?.rango_oculto || null;
+            const busquedaModoAvanzado = rifa.busquedaBoletos?.modoAvanzado === true;
+
+            const totalInput = document.getElementById('sorteo-total-boletos');
+            if (totalInput) totalInput.value = totalBoletos;
+            const tiempoApartadoInput = document.getElementById('tiempo-apartado-horas');
+            if (tiempoApartadoInput) tiempoApartadoInput.value = tiempoApartadoHoras || 1;
+            const toggleBusqueda = document.getElementById('busqueda-boletos-modo-avanzado');
+            if (toggleBusqueda) toggleBusqueda.checked = busquedaModoAvanzado;
+
+            maquinaSuerteLimiteTemporal = obtenerLimiteMaquinaSuerteNormalizado(
+                rifa?.maquinaSuerte?.limiteBoletos,
+                maquinaSuerteLimiteTemporal || 500
+            );
+            const inputLimite = document.getElementById('maquina-suerte-limite');
+            if (inputLimite) inputLimite.value = maquinaSuerteLimiteTemporal;
+            actualizarAyudaLimiteMaquinaSuerte();
+
+            renderizarRangosPublicosEditor(rangos);
+
+            const visibleInicio = document.getElementById('oportunidades-rango-visible-inicio');
+            const visibleFin = document.getElementById('oportunidades-rango-visible-fin');
+            const ocultoInicio = document.getElementById('oportunidades-rango-oculto-inicio');
+            const ocultoFin = document.getElementById('oportunidades-rango-oculto-fin');
+
+            if (visibleInicio) visibleInicio.value = Number.isInteger(Number(rangoVisible?.inicio)) ? Number(rangoVisible.inicio) : '';
+            if (visibleFin) visibleFin.value = Number.isInteger(Number(rangoVisible?.fin)) ? Number(rangoVisible.fin) : '';
+            if (ocultoInicio) ocultoInicio.value = Number.isInteger(Number(rangoOculto?.inicio)) ? Number(rangoOculto.inicio) : '';
+            if (ocultoFin) ocultoFin.value = Number.isInteger(Number(rangoOculto?.fin)) ? Number(rangoOculto.fin) : '';
+        }
+
+        async function guardarBoletajeYRangos() {
+            const btn = document.getElementById('btn-guardar-boletaje-rangos');
+            const originalHTML = btn?.innerHTML;
+
+            try {
+                const totalBoletos = parseInt(document.getElementById('sorteo-total-boletos')?.value, 10);
+                const tiempoApartadoHoras = parseFloat(document.getElementById('tiempo-apartado-horas')?.value);
+                const limiteMaquinaSuerte = obtenerLimiteMaquinaSuerteNormalizado(
+                    document.getElementById('maquina-suerte-limite')?.value,
+                    maquinaSuerteLimiteTemporal || 500
+                );
+                const busquedaBoletosModoAvanzado = document.getElementById('busqueda-boletos-modo-avanzado')?.checked === true;
+                const rangos = obtenerRangosPublicosDesdeDOM();
+                const rangoVisible = normalizarRangoAdmin({
+                    inicio: document.getElementById('oportunidades-rango-visible-inicio')?.value,
+                    fin: document.getElementById('oportunidades-rango-visible-fin')?.value
+                }, 'Visible');
+                const rangoOculto = normalizarRangoAdmin({
+                    inicio: document.getElementById('oportunidades-rango-oculto-inicio')?.value,
+                    fin: document.getElementById('oportunidades-rango-oculto-fin')?.value
+                }, 'Oculto');
+
+                if (!Number.isInteger(totalBoletos) || totalBoletos < 1 || totalBoletos > 10000000) {
+                    throw new Error('El total de boletos debe ser un entero entre 1 y 10,000,000');
+                }
+
+                if (!Number.isFinite(tiempoApartadoHoras) || tiempoApartadoHoras <= 0) {
+                    throw new Error('El tiempo de apartado debe ser mayor a 0 horas');
+                }
+
+                if (rangos.length === 0) {
+                    throw new Error('Debes configurar al menos un rango público');
+                }
+
+                const rangosFueraDeUniverso = rangos.find((rango) => rango.fin >= totalBoletos);
+                if (rangosFueraDeUniverso) {
+                    throw new Error(`El rango "${rangosFueraDeUniverso.nombre}" excede el total de boletos configurado`);
+                }
+
+                if (rangoVisible && rangoVisible.fin >= totalBoletos) {
+                    throw new Error('El rango visible de oportunidades no puede exceder el total de boletos');
+                }
+
+                if (rangoOculto && rangoOculto.fin < rangoOculto.inicio) {
+                    throw new Error('El rango oculto de oportunidades es inválido');
+                }
+
+                const token = localStorage.getItem('rifaplus_token') ||
+                              localStorage.getItem('rifaplus_admin_token') ||
+                              localStorage.getItem('admin_token') ||
+                              localStorage.getItem('token');
+
+                if (!token) {
+                    throw new Error('No hay sesión activa');
+                }
+
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+                }
+
+                const payload = {
+                    rifa: {
+                        totalBoletos,
+                        tiempoApartadoHoras,
+                        maquinaSuerte: {
+                            ...(window.rifaplusConfig?.rifa?.maquinaSuerte || {}),
+                            limiteBoletos: limiteMaquinaSuerte
+                        },
+                        busquedaBoletos: {
+                            ...(window.rifaplusConfig?.rifa?.busquedaBoletos || {}),
+                            modoAvanzado: busquedaBoletosModoAvanzado
+                        },
+                        rangos,
+                        oportunidades: {
+                            ...(window.rifaplusConfig?.rifa?.oportunidades || {}),
+                            rango_visible: rangoVisible ? { inicio: rangoVisible.inicio, fin: rangoVisible.fin } : false,
+                            rango_oculto: rangoOculto ? { inicio: rangoOculto.inicio, fin: rangoOculto.fin } : null
+                        }
+                    }
+                };
+
+                const response = await fetch(`${API_BASE}/api/admin/config`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.message || `HTTP ${response.status}`);
+                }
+
+                if (!window.rifaplusConfig.rifa) window.rifaplusConfig.rifa = {};
+                window.rifaplusConfig.rifa.totalBoletos = totalBoletos;
+                window.rifaplusConfig.rifa.tiempoApartadoHoras = tiempoApartadoHoras;
+                window.rifaplusConfig.rifa.tiempoApartadoMs = tiempoApartadoHoras * 60 * 60 * 1000;
+                window.rifaplusConfig.rifa.rangos = rangos;
+                window.rifaplusConfig.rifa.maquinaSuerte = {
+                    ...(window.rifaplusConfig.rifa.maquinaSuerte || {}),
+                    limiteBoletos: limiteMaquinaSuerte
+                };
+                window.rifaplusConfig.rifa.busquedaBoletos = {
+                    ...(window.rifaplusConfig.rifa.busquedaBoletos || {}),
+                    modoAvanzado: busquedaBoletosModoAvanzado
+                };
+                window.rifaplusConfig.rifa.oportunidades = {
+                    ...(window.rifaplusConfig.rifa.oportunidades || {}),
+                    rango_visible: rangoVisible ? { inicio: rangoVisible.inicio, fin: rangoVisible.fin } : false,
+                    rango_oculto: rangoOculto ? { inicio: rangoOculto.inicio, fin: rangoOculto.fin } : null
+                };
+                maquinaSuerteLimiteTemporal = limiteMaquinaSuerte;
+                actualizarAyudaLimiteMaquinaSuerte();
+
+                guardarValoresOriginaleSorteo();
+                mostrarModalGuardadoExitoso({
+                    titulo: '¡Boletaje Guardado Correctamente!',
+                    subtitulo: 'El total de boletos, la búsqueda, el tiempo de apartado, la máquina de la suerte y los rangos ya quedaron actualizados.'
+                });
+                mostrarAlerta('✅ Boletaje, búsqueda, apartados, máquina y rangos guardados correctamente', 'success');
+            } catch (error) {
+                console.error('❌ Error guardando boletaje y rangos:', error);
+                mostrarAlerta(`❌ Error: ${error.message}`, 'error');
+                throw error;
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHTML || '<i class="fas fa-save"></i> Guardar Boletaje y Rangos';
+                }
+            }
+        }
 
         function detectarCambiosSorteo() {
             const edicionActual = document.getElementById('sorteo-edicion').value.trim();
             const nombreActual = document.getElementById('sorteo-nombre').value.trim();
             const descripcionActual = document.getElementById('sorteo-descripcion').value.trim();
             const imagenPrincipalActual = document.getElementById('sorteo-imagen-principal-url').value.trim();
+            const totalBoletosActual = document.getElementById('sorteo-total-boletos')?.value?.trim() || '';
+            const tiempoApartadoHorasActual = document.getElementById('tiempo-apartado-horas')?.value?.trim() || '';
+            const maquinaSuerteLimiteActual = document.getElementById('maquina-suerte-limite')?.value?.trim() || '';
+            const busquedaBoletosModoAvanzadoActual = document.getElementById('busqueda-boletos-modo-avanzado')?.checked ? 'true' : 'false';
+            const rangosActuales = JSON.stringify(obtenerRangosPublicosDesdeDOM());
+            const rangoVisibleActual = serializarRangoSimpleAdmin('oportunidades-rango-visible-inicio', 'oportunidades-rango-visible-fin');
+            const rangoOcultoActual = serializarRangoSimpleAdmin('oportunidades-rango-oculto-inicio', 'oportunidades-rango-oculto-fin');
 
             const hayCambios = 
                 edicionActual !== window.sorteoValoresOriginales.edicion ||
                 nombreActual !== window.sorteoValoresOriginales.nombre ||
                 descripcionActual !== window.sorteoValoresOriginales.descripcion ||
-                imagenPrincipalActual !== window.sorteoValoresOriginales.imagenPrincipal;
+                imagenPrincipalActual !== window.sorteoValoresOriginales.imagenPrincipal ||
+                totalBoletosActual !== window.sorteoValoresOriginales.totalBoletos ||
+                tiempoApartadoHorasActual !== window.sorteoValoresOriginales.tiempoApartadoHoras ||
+                maquinaSuerteLimiteActual !== window.sorteoValoresOriginales.maquinaSuerteLimite ||
+                busquedaBoletosModoAvanzadoActual !== window.sorteoValoresOriginales.busquedaBoletosModoAvanzado ||
+                rangosActuales !== window.sorteoValoresOriginales.rangos ||
+                rangoVisibleActual !== window.sorteoValoresOriginales.rangoVisible ||
+                rangoOcultoActual !== window.sorteoValoresOriginales.rangoOculto;
 
             return hayCambios;
         }
@@ -7258,7 +7751,14 @@
                 edicion: document.getElementById('sorteo-edicion').value.trim(),
                 nombre: document.getElementById('sorteo-nombre').value.trim(),
                 descripcion: document.getElementById('sorteo-descripcion').value.trim(),
-                imagenPrincipal: document.getElementById('sorteo-imagen-principal-url').value.trim()
+                imagenPrincipal: document.getElementById('sorteo-imagen-principal-url').value.trim(),
+                totalBoletos: document.getElementById('sorteo-total-boletos')?.value?.trim() || '',
+                tiempoApartadoHoras: document.getElementById('tiempo-apartado-horas')?.value?.trim() || '',
+                maquinaSuerteLimite: document.getElementById('maquina-suerte-limite')?.value?.trim() || '',
+                busquedaBoletosModoAvanzado: document.getElementById('busqueda-boletos-modo-avanzado')?.checked ? 'true' : 'false',
+                rangos: JSON.stringify(obtenerRangosPublicosDesdeDOM()),
+                rangoVisible: serializarRangoSimpleAdmin('oportunidades-rango-visible-inicio', 'oportunidades-rango-visible-fin'),
+                rangoOculto: serializarRangoSimpleAdmin('oportunidades-rango-oculto-inicio', 'oportunidades-rango-oculto-fin')
             };
             console.log('📝 Valores originales del sorteo guardados:', window.sorteoValoresOriginales);
         }
@@ -7488,15 +7988,6 @@
                     return;
                 }
                 
-                // 1.5️⃣ VALIDAR TIEMPO DE APARTADO
-                let tiempoApartadoHoras = document.getElementById('tiempo-apartado-horas').value.trim();
-                if (!tiempoApartadoHoras || parseFloat(tiempoApartadoHoras) <= 0) {
-                    mostrarAlerta('❌ El tiempo de apartado debe ser mayor a 0 horas', 'error');
-                    document.getElementById('tiempo-apartado-horas').focus();
-                    return;
-                }
-                tiempoApartadoHoras = parseFloat(tiempoApartadoHoras);
-                
                 // 2️⃣ VALIDAR PRESORTEO SI EXISTE
                 const presorteoActivo = document.getElementById('toggle-presorteo')?.classList.contains('active');
                 let fechaPresorteo = document.getElementById('sorteo-fecha-presorteo').value.trim();
@@ -7516,8 +8007,7 @@
                 // 4️⃣ PREPARAR DATOS A ENVIAR
                 const datosAGuardar = {
                     rifa: {
-                        fechaSorteo: `${fechaSorteo}T${horaSorteo}:00`,
-                        tiempoApartadoHoras: tiempoApartadoHoras
+                        fechaSorteo: `${fechaSorteo}T${horaSorteo}:00`
                     }
                 };
                 
@@ -7528,13 +8018,6 @@
                 }
                 
                 console.log('📤 Guardando fechas y horarios:', datosAGuardar);
-                
-                // VERIFICACIÓN: Confirmar que tiempoApartadoHoras está en los datos
-                if (!datosAGuardar.rifa.tiempoApartadoHoras) {
-                    console.error('❌ ALERTA: tiempoApartadoHoras NO está en datosAGuardar!');
-                } else {
-                    console.log('✅ tiempoApartadoHoras PRESENTE EN DATOS:', datosAGuardar.rifa.tiempoApartadoHoras);
-                }
                 
                 // 5️⃣ INTENTAR GUARDAR EN SERVIDOR
                 const token = localStorage.getItem('rifaplus_token') || 
@@ -7563,7 +8046,6 @@
                     console.log('✅ Fechas guardadas en servidor');
                     const responseData = await response.json();
                     console.log('📥 Respuesta del servidor:', {
-                        tiempoApartadoHorasEnRespuesta: responseData?.data?.rifa?.tiempoApartadoHoras,
                         datosCompletos: responseData?.data
                     });
                     
@@ -7574,8 +8056,6 @@
                     if (window.rifaplusConfig?.rifa) {
                         window.rifaplusConfig.rifa.fechaSorteo = datosAGuardar.rifa.fechaSorteo;
                         window.rifaplusConfig.rifa.horaSorteo = horaSorteo;
-                        window.rifaplusConfig.rifa.tiempoApartadoHoras = tiempoApartadoHoras;
-                        window.rifaplusConfig.rifa.tiempoApartadoMs = tiempoApartadoHoras * 60 * 60 * 1000;
                         if (datosAGuardar.rifa.fechaPresorteo) {
                             window.rifaplusConfig.rifa.fechaPresorteo = datosAGuardar.rifa.fechaPresorteo;
                             window.rifaplusConfig.rifa.horaPresorteo = horaPresorteo;
@@ -7598,9 +8078,6 @@
                     console.log('✅ Campos recargados exitosamente');
                     
                     // Mostrar modal de éxito
-                    mostrarModalExitoFechas();
-                    mostrarAlerta('✅ Fechas y horarios guardados correctamente', 'success');
-                    console.log('🎉 Fechas guardadas exitosamente');
                     mostrarModalExitoFechas();
                     mostrarAlerta('✅ Fechas y horarios guardados correctamente', 'success');
                     console.log('🎉 Fechas guardadas exitosamente');
@@ -7641,6 +8118,7 @@
                 // Este botón global coordina los flujos reales de persistencia
                 // sin depender de campos legacy que ya no existen en la UI.
                 await guardarInfoGeneralSorteo();
+                await guardarBoletajeYRangos();
                 await guardarFechasYHorarios();
 
                 mostrarAlerta('✅ Configuración principal del sorteo guardada correctamente', 'success');
@@ -10765,7 +11243,60 @@
                 document.getElementById('sorteo-descripcion').value = window.rifaplusConfig.rifa.descripcion || '';
             }
 
+            cargarConfiguracionBoletajeYRangos();
+            guardarValoresOriginaleSorteo();
+
             mostrarAlerta('↩️ Cambios descartados', 'info');
+        }
+
+        function esUrlImagenRenderableAdmin(url) {
+            const valor = String(url || '').trim();
+            if (!valor) return false;
+            if (valor.includes('${') || valor.includes('%7B') || valor.includes('%7D')) return false;
+            if (/^https?:\/\//i.test(valor)) return true;
+            if (/^(\/|\.\/|\.\.\/)/.test(valor)) return true;
+            if (/^(images|public|uploads)\//i.test(valor)) return true;
+            if (/^data:image\//i.test(valor)) return true;
+            return false;
+        }
+
+        function obtenerPlaceholderImagenAdmin() {
+            return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 675'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23eaf3fb'/%3E%3Cstop offset='1' stop-color='%23d5e6f5'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1200' height='675' fill='url(%23g)'/%3E%3Ctext x='600' y='330' font-size='46' text-anchor='middle' fill='%231b2a38' font-family='Arial,sans-serif'%3EImagen principal del sorteo%3C/text%3E%3Ctext x='600' y='385' font-size='24' text-anchor='middle' fill='%235e7283' font-family='Arial,sans-serif'%3ECarga una imagen o pega una URL%3C/text%3E%3C/svg%3E";
+        }
+
+        function sanitizarMediaAdminConfig() {
+            const cliente = window.rifaplusConfig?.cliente || {};
+            const rifa = window.rifaplusConfig?.rifa || {};
+            const galeriaActual = Array.isArray(rifa?.galeria?.imagenes) ? rifa.galeria.imagenes : [];
+            const galeriaFiltrada = galeriaActual.filter((imagen) => esUrlImagenRenderableAdmin(imagen?.url));
+            const huboGaleriaInvalida = galeriaFiltrada.length !== galeriaActual.length;
+
+            if (huboGaleriaInvalida) {
+                window.rifaplusConfig.rifa.galeria = {
+                    ...(window.rifaplusConfig.rifa.galeria || {}),
+                    imagenes: galeriaFiltrada
+                };
+                console.warn('⚠️ Se omitieron imágenes inválidas de la galería en admin:', galeriaActual.filter((imagen) => !esUrlImagenRenderableAdmin(imagen?.url)));
+            }
+
+            const imagenPrincipal = String(cliente?.imagenPrincipal || '').trim();
+            const imagenPrincipalValida = esUrlImagenRenderableAdmin(imagenPrincipal);
+
+            if (!imagenPrincipalValida) {
+                const placeholder = obtenerPlaceholderImagenAdmin();
+                if (!window.rifaplusConfig.cliente) window.rifaplusConfig.cliente = {};
+                window.rifaplusConfig.cliente.imagenPrincipal = placeholder;
+                const preview = document.getElementById('preview-imagen-principal');
+                const input = document.getElementById('sorteo-imagen-principal-url');
+                if (preview) preview.src = placeholder;
+                if (input) input.value = '';
+                console.warn('⚠️ Imagen principal inválida detectada y reemplazada por placeholder en admin:', imagenPrincipal);
+            }
+
+            return {
+                huboGaleriaInvalida,
+                imagenPrincipalCorregida: !imagenPrincipalValida
+            };
         }
 
 
@@ -10793,7 +11324,7 @@
 
                 imagenes.forEach((imagen, index) => {
                     const urlImagen = String(imagen?.url || '').trim();
-                    const urlEsValida = urlImagen && !urlImagen.includes('${') && !urlImagen.includes('%7B') && !urlImagen.includes('%7D');
+                    const urlEsValida = esUrlImagenRenderableAdmin(urlImagen);
 
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'sorteo-imagen-item';
@@ -10804,20 +11335,38 @@
                         overflow: hidden;
                         background: #f5f5f5;
                     `;
-                    itemDiv.innerHTML = `
-                        ${urlEsValida
-                            ? `<img src="${urlImagen}" alt="${imagen.titulo || 'Imagen ' + (index + 1)}" style="width: 100%; height: 150px; object-fit: cover;">`
-                            : `<div style="width: 100%; height: 150px; display:flex; align-items:center; justify-content:center; background:#f3f4f6; color:#6b7280; font-size:0.8rem; text-align:center; padding:1rem;">Imagen no disponible</div>`
-                        }
-                        <button type="button" class="btn btn-danger" style="position: absolute; top: 0.5rem; right: 0.5rem; width: 2rem; height: 2rem; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 0.25rem;" 
-                                onclick="eliminarImagenSorteo(${index})" title="Eliminar imagen">
-                            <i class="fas fa-trash" style="font-size: 0.75rem;"></i>
-                        </button>
-                        <div style="padding: 0.5rem; background: white; border-top: 1px solid #e5e7eb;">
-                            <p style="font-size: 0.75rem; font-weight: 600; margin: 0; color: #1f2937;">${imagen.titulo || 'Imagen ' + (index + 1)}</p>
-                            <p style="font-size: 0.7rem; margin: 0.25rem 0 0; color: #6b7280;">${urlEsValida ? (imagen.descripcion || '') : 'La URL de esta imagen no es valida y fue omitida en la vista previa.'}</p>
-                        </div>
+
+                    if (urlEsValida) {
+                        const img = document.createElement('img');
+                        img.src = urlImagen;
+                        img.alt = imagen.titulo || `Imagen ${index + 1}`;
+                        img.style.cssText = 'width: 100%; height: 150px; object-fit: cover;';
+                        img.loading = 'lazy';
+                        itemDiv.appendChild(img);
+                    } else {
+                        const placeholder = document.createElement('div');
+                        placeholder.style.cssText = 'width: 100%; height: 150px; display:flex; align-items:center; justify-content:center; background:#f3f4f6; color:#6b7280; font-size:0.8rem; text-align:center; padding:1rem;';
+                        placeholder.textContent = 'Imagen no disponible';
+                        itemDiv.appendChild(placeholder);
+                    }
+
+                    const botonEliminar = document.createElement('button');
+                    botonEliminar.type = 'button';
+                    botonEliminar.className = 'btn btn-danger';
+                    botonEliminar.title = 'Eliminar imagen';
+                    botonEliminar.style.cssText = 'position: absolute; top: 0.5rem; right: 0.5rem; width: 2rem; height: 2rem; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 0.25rem;';
+                    botonEliminar.onclick = () => eliminarImagenSorteo(index);
+                    botonEliminar.innerHTML = '<i class="fas fa-trash" style="font-size: 0.75rem;"></i>';
+                    itemDiv.appendChild(botonEliminar);
+
+                    const info = document.createElement('div');
+                    info.style.cssText = 'padding: 0.5rem; background: white; border-top: 1px solid #e5e7eb;';
+                    info.innerHTML = `
+                        <p style="font-size: 0.75rem; font-weight: 600; margin: 0; color: #1f2937;">${imagen.titulo || 'Imagen ' + (index + 1)}</p>
+                        <p style="font-size: 0.7rem; margin: 0.25rem 0 0; color: #6b7280;">${urlEsValida ? (imagen.descripcion || '') : 'La URL de esta imagen no es valida y fue omitida en la vista previa.'}</p>
                     `;
+                    itemDiv.appendChild(info);
+
                     galeria.appendChild(itemDiv);
 
                     if (!urlEsValida) {
@@ -11152,6 +11701,8 @@
             }
             
             cargarImagenesSorteo();
+            cargarConfiguracionBoletajeYRangos();
+            guardarValoresOriginaleSorteo();
         }, 1000);
         
         // ========================================================== //
@@ -12030,10 +12581,6 @@
             const btnGuardarBonosCompra = document.getElementById('btn-guardar-bonos-compra');
             if (btnGuardarBonosCompra) {
                 btnGuardarBonosCompra.onclick = guardarBonosCompra;
-            }
-            const btnGuardarMaquinaSuerte = document.getElementById('btn-guardar-maquina-suerte');
-            if (btnGuardarMaquinaSuerte) {
-                btnGuardarMaquinaSuerte.onclick = guardarLimiteMaquinaSuerte;
             }
             const inputLimiteMaquinaSuerte = document.getElementById('maquina-suerte-limite');
             if (inputLimiteMaquinaSuerte) {

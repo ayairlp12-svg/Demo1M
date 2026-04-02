@@ -496,7 +496,7 @@
         </section>
 
         <!-- SECCIÓN 1: TRANSFERENCIAS BANCARIAS -->
-        <section class="payment-section">
+        <section class="payment-section perf-defer-mobile perf-defer-mobile--compact">
             <div class="section-header">
                 <h2 class="section-title">Transferencias bancarias</h2>
                 <p class="section-description">Usa estos datos para transferencias o pagos desde banca móvil. Verifica el número de cuenta y el nombre del beneficiario antes de confirmar la operación.</p>
@@ -505,7 +505,7 @@
         </section>
 
         <!-- SECCIÓN 2: DEPÓSITOS EN EFECTIVO -->
-        <section class="payment-section">
+        <section class="payment-section perf-defer-mobile perf-defer-mobile--compact">
             <div class="section-header">
                 <h2 class="section-title">Depósitos en efectivo</h2>
                 <p class="section-description">Si prefieres pagar en sucursal o tienda autorizada, utiliza esta información tal como se muestra y conserva tu comprobante para reportarlo después.</p>
@@ -578,7 +578,7 @@
     </main>
 
     <!-- FOOTER REDISEÑADO -->
-    <footer class="footer">
+    <footer class="footer perf-defer-mobile perf-defer-mobile--compact">
         <div class="container">
             <!-- 📱 BOLETERA DIGITAL CTA - LÍNEA DISCRETA -->
             <div class="footer-boletera-cta">
@@ -771,31 +771,16 @@
         }
 
         async function loadCuentasAndRender() {
-            // Render inmediato con fallback local para evitar que la página
-            // arranque "corta" mientras llega la respuesta del servidor.
-            render();
-
             // ✅ CARGAR CUENTAS DESDE EL SERVIDOR PRIMERO
             try {
-                const apiBase = (window.rifaplusConfig && window.rifaplusConfig.backend && window.rifaplusConfig.backend.apiBase) 
-                    ? window.rifaplusConfig.backend.apiBase 
-                    : ((window.rifaplusConfig && typeof window.rifaplusConfig.obtenerApiBase === 'function')
-                        ? window.rifaplusConfig.obtenerApiBase()
-                        : window.location.origin);
-                    
-                const response = await fetch(`${apiBase}/api/public/config`, {
-                    method: 'GET',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                
-                if (response.ok) {
-                    const result = await response.json();
-                    if (result.data?.cuentas && Array.isArray(result.data.cuentas) && result.data.cuentas.length > 0) {
-                        // Actualizar config.js con cuentas del servidor
-                        if (window.rifaplusConfig && window.rifaplusConfig.tecnica) {
-                            window.rifaplusConfig.tecnica.bankAccounts = result.data.cuentas;
-                            console.log('✅ [Cuentas-Pago] Cuentas cargadas desde servidor:', result.data.cuentas.length);
-                        }
+                const configPublica = typeof window.rifaplusConfig?.obtenerConfigPublicaCompartida === 'function'
+                    ? await window.rifaplusConfig.obtenerConfigPublicaCompartida()
+                    : null;
+
+                if (configPublica?.cuentas && Array.isArray(configPublica.cuentas) && configPublica.cuentas.length > 0) {
+                    if (window.rifaplusConfig && window.rifaplusConfig.tecnica) {
+                        window.rifaplusConfig.tecnica.bankAccounts = configPublica.cuentas;
+                        console.log('✅ [Cuentas-Pago] Cuentas cargadas desde configuración compartida:', configPublica.cuentas.length);
                     }
                 }
             } catch (err) {
@@ -953,7 +938,26 @@
     <script defer src="js/flujo-compra.js?v=20260329.3"></script>
     <script defer src="js/orden-formal.js"></script>
     <script defer src="js/modal-contacto.js?v=20260329.2"></script>
-    <script defer src="js/btn-flotante-animator.js"></script>
+    <script defer>
+        (function cargarAnimadorBotonFlotanteEnSegundoPlano() {
+            function loadAnimator() {
+                if (document.querySelector('script[data-rifaplus-animator]')) return;
+                const script = document.createElement('script');
+                script.src = 'js/btn-flotante-animator.js';
+                script.defer = true;
+                script.dataset.rifaplusAnimator = 'true';
+                document.head.appendChild(script);
+            }
+
+            const idle = window.requestIdleCallback || function(cb) {
+                return setTimeout(cb, 1200);
+            };
+
+            window.addEventListener('load', function() {
+                idle(loadAnimator, { timeout: 2000 });
+            }, { once: true });
+        })();
+    </script>
 
     <!-- Script para mejorar funcionalidad de copiar en cuentas-pago -->
     <script defer>

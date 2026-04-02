@@ -171,62 +171,38 @@ async function verificarEstadoBoletoEnServidor(numero) {
 }
 
 async function generarNumerosVerificadosEnServidor(cantidad) {
-    const numerosConfirmados = [];
-    const numerosDescartados = new Set();
-    let reintentos = 0;
+    const endpoint = obtenerApiBaseCompra();
+    const seleccionadosActuales = Array.from(selectedNumbersGlobal || []);
+    const numerosYaGenerados = document.getElementById('numerosSuerte')?.getAttribute('data-numeros');
+    const generadosPrevios = numerosYaGenerados
+        ? numerosYaGenerados.split(',').map((n) => parseInt(n, 10)).filter((n) => Number.isInteger(n))
+        : [];
+    const excludeNumbers = Array.from(new Set([...seleccionadosActuales, ...generadosPrevios]));
 
-    while (numerosConfirmados.length < cantidad && reintentos < 5) {
-        const faltantes = cantidad - numerosConfirmados.length;
-        const baseDisponibles = obtenerNumerosDisponibles().filter((numero) => {
-            return !numerosConfirmados.includes(numero) && !numerosDescartados.has(numero);
-        });
+    const respuesta = await fetch(`${endpoint}/api/boletos/disponibles-aleatorios`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            cantidad,
+            excludeNumbers
+        })
+    });
 
-        if (baseDisponibles.length < faltantes) {
-            console.warn(`⚠️ [Maquina] No hay suficientes candidatos locales (${baseDisponibles.length}) para completar ${faltantes}. Refrescando...`);
-            await cargarBoletosPublicos();
-        }
-
-        const candidatos = [];
-        const disponiblesCopia = [...baseDisponibles];
-        const cantidadARobar = Math.min(faltantes, disponiblesCopia.length);
-
-        for (let i = 0; i < cantidadARobar; i++) {
-            const randomIndex = Math.floor(Math.random() * disponiblesCopia.length);
-            const numero = disponiblesCopia.splice(randomIndex, 1)[0];
-            candidatos.push(numero);
-        }
-
-        if (candidatos.length === 0) {
-            break;
-        }
-
-        const verificacion = await verificarBoletosEnServidor(candidatos);
-        const disponiblesServidor = Array.isArray(verificacion?.disponibles) ? verificacion.disponibles : [];
-        const conflictosServidor = Array.isArray(verificacion?.conflictos) ? verificacion.conflictos : [];
-
-        disponiblesServidor.forEach((numero) => {
-            const normalizado = Number(numero);
-            if (!Number.isNaN(normalizado) && !numerosConfirmados.includes(normalizado)) {
-                numerosConfirmados.push(normalizado);
-            }
-        });
-
-        conflictosServidor.forEach((conflicto) => {
-            const numero = Number(conflicto?.numero);
-            if (!Number.isNaN(numero)) {
-                numerosDescartados.add(numero);
-            }
-        });
-
-        if (conflictosServidor.length > 0) {
-            console.warn(`⚠️ [Maquina] ${conflictosServidor.length} boleto(s) chocaron con el servidor durante la generación. Reintentando...`);
-            await cargarBoletosPublicos();
-        }
-
-        reintentos++;
+    if (!respuesta.ok) {
+        throw new Error(`No se pudieron generar boletos aleatorios (${respuesta.status})`);
     }
 
-    return numerosConfirmados.slice(0, cantidad);
+    const json = await respuesta.json();
+    if (!json?.success) {
+        throw new Error(json?.message || 'No se pudieron generar boletos aleatorios');
+    }
+
+    const boletos = Array.isArray(json.boletos) ? json.boletos : [];
+    return boletos
+        .map((numero) => Number(numero))
+        .filter((numero) => Number.isInteger(numero));
 }
 
 async function cargarEstadoRangoVisibleEnBackground(endpoint, inicio, fin) {
@@ -946,18 +922,8 @@ function inicializarMaquinaSuerteMejorada() {
     }
 }
 
-function obtenerTamanoRangoVisibleCompra() {
+function obtenerUniversoMaquinaSuerteCompra() {
     const totalTickets = Number(window.rifaplusConfig?.rifa?.totalBoletos) || 0;
-    const oportunidadesConfig = window.rifaplusConfig?.rifa?.oportunidades;
-
-    if (oportunidadesConfig?.enabled && oportunidadesConfig?.rango_visible) {
-        const inicio = Number(oportunidadesConfig.rango_visible.inicio);
-        const fin = Number(oportunidadesConfig.rango_visible.fin);
-        if (Number.isFinite(inicio) && Number.isFinite(fin) && fin >= inicio) {
-            return (fin - inicio) + 1;
-        }
-    }
-
     return Math.max(0, totalTickets);
 }
 
@@ -968,9 +934,9 @@ function obtenerLimiteConfiguradoMaquinaSuerte() {
 
 function obtenerMaximoPermitidoMaquinaSuerte() {
     const limiteConfigurado = obtenerLimiteConfiguradoMaquinaSuerte();
-    const tamanoRangoVisible = obtenerTamanoRangoVisibleCompra();
-    if (tamanoRangoVisible <= 0) return limiteConfigurado;
-    return Math.min(limiteConfigurado, tamanoRangoVisible);
+    const universoTotal = obtenerUniversoMaquinaSuerteCompra();
+    if (universoTotal <= 0) return limiteConfigurado;
+    return Math.min(limiteConfigurado, universoTotal);
 }
 
 function normalizarCantidadMaquinaSuerte(valor, permitirCero = true) {
@@ -986,8 +952,6 @@ function actualizarLimiteMaquinaSuerteUI() {
     const inputCantidad = document.getElementById('cantidadNumeros');
     const hint = document.getElementById('maquinaLimiteHint');
     const maximo = obtenerMaximoPermitidoMaquinaSuerte();
-    const limiteConfigurado = obtenerLimiteConfiguradoMaquinaSuerte();
-    const tamanoRangoVisible = obtenerTamanoRangoVisibleCompra();
 
     if (inputCantidad) {
         inputCantidad.max = String(maximo);
@@ -996,11 +960,7 @@ function actualizarLimiteMaquinaSuerteUI() {
     }
 
     if (hint) {
-        if (tamanoRangoVisible > 0 && maximo < limiteConfigurado) {
-            hint.textContent = `Puedes generar hasta ${maximo} boletos por ronda. El límite se ajustó al rango comprable actual.`;
-        } else {
-            hint.textContent = `Puedes generar hasta ${maximo} boletos por ronda.`;
-        }
+        hint.textContent = `Puedes generar hasta ${maximo} boletos por ronda.`;
     }
 
     actualizarTotalMaquina();
@@ -1066,53 +1026,10 @@ function actualizarEstadoBotonGenerar() {
 function actualizarNotaDisponibilidad() {
     const note = document.getElementById('availabilityNote');
     if (!note) return;
-    
-    // ⭐ OPTIMIZACIÓN: Actualizar con datos reales SOLO si están disponibles
-    // Si estamos cargando o los datos son incompletos, NO CAMBIAR el valor actual
-    if (window.rifaplusBoletosLoaded) {
-        const { sold, reserved } = obtenerEstadoLocalBoletos();
-        
-        // 🔴 CRÍTICO: Si NO tenemos datos de boletos aún (arrays vacíos), NO actualizar
-        // Dejar que Season 1 (/stats) haya puesto el valor correcto
-        if (sold.length === 0 && reserved.length === 0 && !rifaplusEstadoRangoActual.cargado) {
-            // Arrays vacíos = datos aún no disponibles, NO sobrescribir
-            return;
-        }
-        
-        // Obtener configuración del rango visible si oportunidades están habilitadas
-        const oportunidadesConfig = window.rifaplusConfig && window.rifaplusConfig.rifa && window.rifaplusConfig.rifa.oportunidades;
-        let disponiblesActual = 0;
-        
-        if (oportunidadesConfig && oportunidadesConfig.enabled && oportunidadesConfig.rango_visible) {
-            // Calcular para el rango visible
-            const rangoVisible = oportunidadesConfig.rango_visible;
-            const tamanoRango = (rangoVisible.fin - rangoVisible.inicio) + 1;
-            let vendidosEnRango = 0;
-            let apartadosEnRango = 0;
-            
-            sold.forEach(num => {
-                if (num >= rangoVisible.inicio && num <= rangoVisible.fin) {
-                    vendidosEnRango++;
-                }
-            });
-            
-            reserved.forEach(num => {
-                if (num >= rangoVisible.inicio && num <= rangoVisible.fin) {
-                    apartadosEnRango++;
-                }
-            });
-            
-            disponiblesActual = Math.max(0, tamanoRango - vendidosEnRango - apartadosEnRango);
-        } else if (rifaplusEstadoRangoActual.cargado) {
-            const rangoActual = infiniteScrollState.rangoActual || obtenerRangoVisibleInicial();
-            const tamanoRango = (rangoActual.fin - rangoActual.inicio) + 1;
-            disponiblesActual = Math.max(0, tamanoRango - sold.length - reserved.length);
-        } else {
-            const disponibles = obtenerNumerosDisponibles();
-            disponiblesActual = Array.isArray(disponibles) ? disponibles.length : 0;
-        }
-        
-        note.textContent = `${disponiblesActual} boletos disponibles`;
+
+    const disponiblesGlobales = Number(window.rifaplusConfig?.estado?.boletosDisponibles);
+    if (Number.isFinite(disponiblesGlobales) && disponiblesGlobales >= 0) {
+        note.textContent = `${disponiblesGlobales} boletos disponibles`;
         note.style.display = 'inline-block';
         return;
     }
@@ -1162,33 +1079,17 @@ async function generarNumerosAleatoriosMejorado() {
     }
     
     try {
-        // Esperar a que se carguen los datos de boletos si no están listos
-        if (!window.rifaplusBoletosLoaded) {
-            console.log('⏳ Esperando datos de boletos...');
-            await cargarBoletosPublicos();
-        }
-        
-        // Obtener números disponibles
-        const numerosDisponibles = obtenerNumerosDisponibles();
-        
-        if (numerosDisponibles.length === 0) {
-            rifaplusUtils.showFeedback('❌ No hay números disponibles en este momento. Recargando datos...', 'error');
-            await cargarBoletosPublicos();
-            rifaplusUtils.showFeedback('Intenta de nuevo.', 'info');
+        const disponiblesGlobales = Number(window.rifaplusConfig?.estado?.boletosDisponibles);
+        if (Number.isFinite(disponiblesGlobales) && disponiblesGlobales >= 0 && disponiblesGlobales < cantidad) {
+            rifaplusUtils.showFeedback(`⚠️ Solo hay ${disponiblesGlobales} boletos disponibles. No puedes generar ${cantidad} números.`, 'warning');
             return;
         }
-        
-        if (numerosDisponibles.length < cantidad) {
-            rifaplusUtils.showFeedback(`⚠️ Solo hay ${numerosDisponibles.length} números disponibles. No puedes generar ${cantidad} números.`, 'warning');
-            return;
-        }
-        
-        // Generar números aleatorios y validarlos contra el backend antes de mostrarlos
+
         const numerosGenerados = await generarNumerosVerificadosEnServidor(cantidad);
 
         if (numerosGenerados.length < cantidad) {
             await cargarBoletosPublicos();
-            rifaplusUtils.showFeedback(`⚠️ Solo se pudieron validar ${numerosGenerados.length} de ${cantidad} boletos en este momento. Intenta de nuevo.`, 'warning');
+            rifaplusUtils.showFeedback(`⚠️ Solo se pudieron obtener ${numerosGenerados.length} de ${cantidad} boletos disponibles en este momento. Intenta de nuevo.`, 'warning');
             return;
         }
         
@@ -2054,26 +1955,120 @@ function manejarCambioRango(boton) {
 
 function configurarBuscadorBoletos() {
     const inputBusqueda = document.getElementById('busquedaBoleto');
+    const inputBusquedaFin = document.getElementById('busquedaBoletoFin');
     const btnBuscar = document.getElementById('btnBuscarBoleto');
+    const selectModo = document.getElementById('busquedaModo');
+    const checkboxFiltroDisponibles = document.getElementById('filtroDisponibles');
+    const toolbarAvanzada = document.getElementById('busquedaToolbarAvanzada');
+    const labelPrincipal = document.getElementById('busquedaLabelPrincipal');
+    const helperText = document.getElementById('busquedaHelperText');
+    const wrapperPrincipal = document.getElementById('busquedaWrapperPrincipal');
     const feedbackEl = document.getElementById('busquedaFeedback');
     const resultadosDiv = document.getElementById('busquedaResultados');
-    const resultadosList = document.getElementById('resultadosList');
     const rangoInicio = document.getElementById('rangoInicio');
     const rangoTotal = document.getElementById('rangoTotal');
+    const rangoBoxes = document.getElementById('rangoBoxes');
+    const instruccionRango = document.querySelector('.instruccion-rango');
+    const boletosContainer = document.querySelector('.boletos-container-scrolleable');
+    const numerosGrid = document.getElementById('numerosGrid');
+    const busquedaGridToolbar = document.getElementById('busquedaGridToolbar');
+    const busquedaLoadMoreFooter = document.getElementById('busquedaLoadMoreFooter');
+    const LIMITE_RESULTADOS_BUSQUEDA = 1000;
+    const MAX_RESULTADOS_BUSQUEDA_AMPLIA = 5000;
 
     if (!inputBusqueda || !btnBuscar) return;
 
+    const modoMeta = {
+        exacto: {
+            label: 'Buscar boleto por número:',
+            placeholder: 'Ej. 42',
+            help: 'Escribe un número exacto para ir directo a ese boleto.'
+        },
+        empieza: {
+            label: 'Buscar boletos que empiezan con:',
+            placeholder: 'Ej. 12',
+            help: 'Encuentra boletos cuyo número comienza con esos dígitos.'
+        },
+        termina: {
+            label: 'Buscar boletos que terminan con:',
+            placeholder: 'Ej. 77',
+            help: 'Útil para quienes prefieren cierta terminación.'
+        },
+        contiene: {
+            label: 'Buscar boletos que contienen:',
+            placeholder: 'Ej. 25',
+            help: 'Busca boletos que tengan esa secuencia en cualquier parte.'
+        },
+        rango: {
+            label: 'Buscar boletos dentro de un rango:',
+            placeholder: 'Desde',
+            help: 'Define un inicio y un fin para ver boletos en ese tramo.'
+        }
+    };
+    const estadoBusqueda = {
+        requestId: 0,
+        abortController: null
+    };
+    const estadoBusquedaGrid = {
+        activa: false,
+        cargandoMas: false,
+        params: null,
+        meta: null,
+        ultimoOffset: 0,
+        hayMas: false,
+        totalMostrados: 0
+    };
+
+    function crearErrorBusquedaCancelada() {
+        const error = new Error('Busqueda cancelada');
+        error.name = 'AbortError';
+        return error;
+    }
+
+    function esBusquedaCancelada(error) {
+        return error?.name === 'AbortError';
+    }
+
+    function cancelarBusquedaActiva() {
+        if (estadoBusqueda.abortController) {
+            estadoBusqueda.abortController.abort();
+            estadoBusqueda.abortController = null;
+        }
+    }
+
+    function asegurarBusquedaVigente(requestId) {
+        if (requestId !== estadoBusqueda.requestId) {
+            throw crearErrorBusquedaCancelada();
+        }
+    }
+
+    function establecerEstadoBuscando(activo) {
+        if (!btnBuscar) return;
+        btnBuscar.disabled = activo;
+        btnBuscar.classList.toggle('is-loading', activo);
+        btnBuscar.textContent = activo ? 'Buscando...' : 'Buscar';
+    }
+
+    function esperar(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function obtenerConfiguracionBusquedaBoletos() {
+        return window.rifaplusConfig?.rifa?.busquedaBoletos || {};
+    }
+
+    function busquedaAvanzadaHabilitada() {
+        if (!selectModo) return false;
+        return obtenerConfiguracionBusquedaBoletos().modoAvanzado === true;
+    }
+
     function obtenerRangoBusquedaActual() {
-        const inicio = typeof window.rifaplusConfig?.obtenerRangoMinimoBoletos === 'function'
-            ? window.rifaplusConfig.obtenerRangoMinimoBoletos()
-            : 0;
-        const fin = typeof window.rifaplusConfig?.obtenerRangoMaximoBoletos === 'function'
-            ? window.rifaplusConfig.obtenerRangoMaximoBoletos()
-            : (window.rifaplusConfig?.rifa?.totalBoletos || 0);
+        const totalBoletos = Number(window.rifaplusConfig?.rifa?.totalBoletos) || 0;
+        const fin = totalBoletos > 0 ? totalBoletos - 1 : 0;
 
         return {
-            inicio: Number.isFinite(inicio) && inicio >= 0 ? inicio : 0,
-            fin: Number.isFinite(fin) && fin > 0 ? fin : 0
+            inicio: 0,
+            fin: Number.isFinite(fin) && fin >= 0 ? fin : 0
         };
     }
 
@@ -2083,9 +2078,9 @@ function configurarBuscadorBoletos() {
         if (rangoInicio) rangoInicio.textContent = rango.inicio.toLocaleString();
         if (rangoTotal) rangoTotal.textContent = rango.fin.toLocaleString();
 
-        inputBusqueda.min = String(rango.inicio);
-        inputBusqueda.max = String(rango.fin);
-        inputBusqueda.placeholder = `Ej. ${rango.inicio}`;
+        if (!busquedaAvanzadaHabilitada()) {
+            inputBusqueda.placeholder = modoMeta.exacto.placeholder;
+        }
     }
 
     function limpiarFeedbackBusqueda() {
@@ -2101,22 +2096,651 @@ function configurarBuscadorBoletos() {
         feedbackEl.classList.add('is-visible', `is-${tipo}`);
     }
 
+    function normalizarValorNumericoEntrada(valor) {
+        return String(valor || '').replace(/\D+/g, '');
+    }
+
+    function obtenerResultadosListActual() {
+        return document.getElementById('resultadosList');
+    }
+
+    function asegurarMarkupResultadosLista() {
+        if (!resultadosDiv) return null;
+
+        let lista = obtenerResultadosListActual();
+        if (lista) return lista;
+
+        resultadosDiv.classList.remove('busqueda-resultados--grid');
+        resultadosDiv.innerHTML = `
+            <div class="resultados-header">
+                <strong>Resultados encontrados:</strong>
+            </div>
+            <div class="resultados-list" id="resultadosList"></div>
+        `;
+
+        return obtenerResultadosListActual();
+    }
+
+    function limpiarResultadosBusqueda() {
+        const lista = obtenerResultadosListActual();
+        if (lista) lista.innerHTML = '';
+        if (resultadosDiv) {
+            resultadosDiv.style.display = 'none';
+            resultadosDiv.classList.remove('busqueda-resultados--grid');
+        }
+    }
+
+    function limpiarToolbarBusquedaGrid() {
+        if (!busquedaGridToolbar) return;
+        busquedaGridToolbar.innerHTML = '';
+        busquedaGridToolbar.style.display = 'none';
+        busquedaGridToolbar.classList.remove('is-visible');
+    }
+
+    function resetearEstadoBusquedaGrid() {
+        estadoBusquedaGrid.activa = false;
+        estadoBusquedaGrid.cargandoMas = false;
+        estadoBusquedaGrid.params = null;
+        estadoBusquedaGrid.meta = null;
+        estadoBusquedaGrid.ultimoOffset = 0;
+        estadoBusquedaGrid.hayMas = false;
+        estadoBusquedaGrid.totalMostrados = 0;
+    }
+
+    function limpiarFooterBusquedaGrid() {
+        if (!busquedaLoadMoreFooter) return;
+        busquedaLoadMoreFooter.innerHTML = '';
+        busquedaLoadMoreFooter.hidden = true;
+    }
+
+    function actualizarFooterBusquedaGrid() {
+        if (!busquedaLoadMoreFooter) return;
+
+        if (!estadoBusquedaGrid.activa || !estadoBusquedaGrid.hayMas) {
+            limpiarFooterBusquedaGrid();
+            return;
+        }
+
+        const totalMostrados = estadoBusquedaGrid.totalMostrados.toLocaleString();
+        busquedaLoadMoreFooter.hidden = false;
+        busquedaLoadMoreFooter.innerHTML = `
+            <div class="busqueda-load-more-card">
+                <div class="busqueda-load-more-copy">
+                    <strong>Mostrando ${totalMostrados} resultados</strong>
+                    <span>Hay más coincidencias disponibles. Puedes cargar el siguiente bloque sin salir de la búsqueda.</span>
+                </div>
+                <button type="button" class="btn btn-secondary busqueda-load-more-btn" data-busqueda-load-more ${estadoBusquedaGrid.cargandoMas ? 'disabled' : ''}>
+                    ${estadoBusquedaGrid.cargandoMas ? 'Cargando...' : 'Cargar más'}
+                </button>
+            </div>
+        `;
+
+        const btnLoadMore = busquedaLoadMoreFooter.querySelector('[data-busqueda-load-more]');
+        if (btnLoadMore) {
+            btnLoadMore.addEventListener('click', cargarMasResultadosBusquedaGrid);
+        }
+    }
+
+    function restaurarVistaPrincipalBoletos() {
+        const rangosConfigurados = (window.rifaplusConfig?.rifa?.rangos || []).filter((rango) =>
+            Number.isInteger(parseInt(rango?.inicio, 10)) &&
+            Number.isInteger(parseInt(rango?.fin, 10))
+        );
+        const mostrarSelectorRangos = rangosConfigurados.length > 1;
+
+        if (rangoBoxes) rangoBoxes.style.display = mostrarSelectorRangos ? 'flex' : 'none';
+        if (instruccionRango) instruccionRango.style.display = mostrarSelectorRangos ? 'block' : 'none';
+        if (boletosContainer) boletosContainer.style.display = '';
+        limpiarToolbarBusquedaGrid();
+        limpiarFooterBusquedaGrid();
+
+        const sentinel = document.getElementById('infiniteScrollSentinel');
+        if (sentinel) sentinel.style.display = '';
+    }
+
+    function activarVistaResultadosBusqueda() {
+        if (rangoBoxes) rangoBoxes.style.display = 'none';
+        if (instruccionRango) instruccionRango.style.display = 'none';
+        if (boletosContainer) boletosContainer.style.display = '';
+    }
+
+    function mostrarToolbarBusquedaGrid(resumen, detalle = '') {
+        if (!busquedaGridToolbar) return;
+
+        busquedaGridToolbar.innerHTML = `
+            <div class="busqueda-grid-toolbar-copy">
+                <strong>${resumen}</strong>
+                <span>${detalle}</span>
+            </div>
+            <button type="button" class="btn btn-secondary" data-busqueda-reset-grid>Ver boletera completa</button>
+        `;
+        busquedaGridToolbar.style.display = 'flex';
+        busquedaGridToolbar.classList.add('is-visible');
+
+        const btnReset = busquedaGridToolbar.querySelector('[data-busqueda-reset-grid]');
+        if (btnReset) {
+            btnReset.addEventListener('click', function() {
+                restaurarBoleteraDespuesDeBusqueda();
+            });
+        }
+    }
+
+    function restaurarBoleteraDespuesDeBusqueda() {
+        cancelarBusquedaActiva();
+        establecerEstadoBuscando(false);
+        limpiarResultadosBusqueda();
+        limpiarToolbarBusquedaGrid();
+        limpiarFooterBusquedaGrid();
+        limpiarFeedbackBusqueda();
+        resetearEstadoBusquedaGrid();
+
+        if (inputBusqueda) inputBusqueda.value = '';
+        if (inputBusquedaFin) inputBusquedaFin.value = '';
+
+        infiniteScrollState.lastRenderTime = 0;
+        restaurarVistaPrincipalBoletos();
+
+        const botonActivo = document.querySelector('.rango-btn.active');
+        if (botonActivo) {
+            manejarCambioRango(botonActivo);
+        } else {
+            inicializarRangoDefault();
+        }
+    }
+
+    function restaurarGridPrincipalSiHaceFalta() {
+        const sentinel = document.getElementById('infiniteScrollSentinel');
+        const gridEnModoBusqueda = (sentinel && sentinel.style.display === 'none')
+            || busquedaGridToolbar?.classList.contains('is-visible');
+
+        if (!gridEnModoBusqueda) return;
+
+        infiniteScrollState.lastRenderTime = 0;
+        restaurarBoleteraDespuesDeBusqueda();
+    }
+
+    function formatearNumeroBusqueda(numero) {
+        if (window.rifaplusConfig?.formatearNumeroBoleto) {
+            return window.rifaplusConfig.formatearNumeroBoleto(numero);
+        }
+        return String(numero).padStart(6, '0');
+    }
+
+    function construirTarjetaResultadoBusqueda(item, selectedNumbers) {
+        const numero = Number(item?.numero);
+        let classes = 'numero-btn';
+        let disabled = false;
+        let title = '';
+
+        if (item?.estado === 'vendido') {
+            classes += ' sold';
+            disabled = true;
+            title = 'Vendido';
+        } else if (item?.estado === 'apartado') {
+            classes += ' reserved';
+            disabled = true;
+            title = 'Apartado';
+        } else if (selectedNumbers.includes(numero)) {
+            classes += ' selected';
+            title = 'Ya seleccionado';
+        }
+
+        return `
+            <button
+                class="${classes} busqueda-grid-btn"
+                data-numero="${numero}"
+                ${disabled ? 'disabled' : ''}
+                ${title ? `title="${title}"` : ''}
+            >
+                ${formatearNumeroBusqueda(numero)}
+            </button>
+        `;
+    }
+
+    async function buscarTodosLosBoletosEnServidor(params, requestId, signal, offsetBase = 0) {
+        const items = [];
+        let offset = offsetBase;
+        let paginas = 0;
+        const MAX_PAGINAS_BUSQUEDA = 200;
+        let truncado = false;
+        let motivoTruncado = '';
+
+        while (true) {
+            asegurarBusquedaVigente(requestId);
+            if (paginas >= MAX_PAGINAS_BUSQUEDA) {
+                truncado = true;
+                motivoTruncado = 'paginas';
+                break;
+            }
+
+            const data = await buscarBoletosEnServidor({
+                ...params,
+                limite: LIMITE_RESULTADOS_BUSQUEDA,
+                offset
+            }, { signal });
+
+            const batch = Array.isArray(data.items) ? data.items : [];
+            if (batch.length > 0) {
+                const espacioDisponible = Math.max(0, MAX_RESULTADOS_BUSQUEDA_AMPLIA - items.length);
+                if (espacioDisponible > 0) {
+                    items.push(...batch.slice(0, espacioDisponible));
+                }
+
+                if (batch.length > espacioDisponible) {
+                    truncado = true;
+                    motivoTruncado = 'limite_resultados';
+                    break;
+                }
+            }
+
+            if (batch.length < LIMITE_RESULTADOS_BUSQUEDA) {
+                return {
+                    ...data,
+                    items,
+                    truncado,
+                    hayMas: false,
+                    siguienteOffset: offsetBase + items.length
+                };
+            }
+
+            offset += batch.length;
+            paginas += 1;
+        }
+
+        return {
+            items,
+            truncado: true,
+            motivoTruncado,
+            hayMas: true,
+            siguienteOffset: offsetBase + items.length
+        };
+    }
+
+    async function renderizarBotonesBusquedaEnGrid(items, selectedNumbers, requestId, append = false) {
+        if (!numerosGrid) return;
+
+        if (!append) {
+            numerosGrid.innerHTML = '';
+        }
+        const CHUNK_SIZE = 250;
+
+        for (let indice = 0; indice < items.length; indice += CHUNK_SIZE) {
+            asegurarBusquedaVigente(requestId);
+
+            const segmento = items.slice(indice, indice + CHUNK_SIZE);
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = segmento.map((item) => construirTarjetaResultadoBusqueda(item, selectedNumbers)).join('');
+
+            while (tempDiv.firstChild) {
+                numerosGrid.appendChild(tempDiv.firstChild);
+            }
+
+            if (indice + CHUNK_SIZE < items.length) {
+                await new Promise((resolve) => requestAnimationFrame(resolve));
+            }
+        }
+    }
+
+    async function renderizarResultadosBusquedaEnGrid(items, metaBusqueda = {}, requestId, opciones = {}) {
+        if (!numerosGrid) return;
+
+        const append = opciones.append === true;
+        const selectedNumbers = obtenerBoletosSelecionados();
+        activarVistaResultadosBusqueda();
+        limpiarResultadosBusqueda();
+
+        if (!append && infiniteScrollState.observer) {
+            infiniteScrollState.observer.disconnect();
+        }
+
+        const sentinel = document.getElementById('infiniteScrollSentinel');
+        if (sentinel) sentinel.style.display = 'none';
+
+        if (!Array.isArray(items) || items.length === 0) {
+            if (!append) {
+                numerosGrid.innerHTML = `<div class="resultados-vacio resultados-vacio--grid">${construirMensajeSinResultados(metaBusqueda.modo, metaBusqueda.availableOnly)}</div>`;
+                mostrarToolbarBusquedaGrid(
+                    'Resultados de búsqueda',
+                    construirMensajeSinResultados(metaBusqueda.modo, metaBusqueda.availableOnly)
+                );
+            }
+            return;
+        }
+
+        numerosGrid.style.pointerEvents = 'none';
+        numerosGrid.style.opacity = '1';
+        await renderizarBotonesBusquedaEnGrid(items, selectedNumbers, requestId, append);
+        asegurarBusquedaVigente(requestId);
+        numerosGrid.style.pointerEvents = 'auto';
+
+        const totalMostrados = Number(metaBusqueda.totalMostrados || items.length);
+        const resumen = `${totalMostrados.toLocaleString()} boleto${totalMostrados === 1 ? '' : 's'} encontrado${totalMostrados === 1 ? '' : 's'}`;
+        const detalle = metaBusqueda.textoBusqueda
+            ? `Filtro "${metaBusqueda.textoBusqueda}" en modo "${metaBusqueda.labelModo || metaBusqueda.modo}".`
+            : 'Resultados cargados en la boletera.';
+        mostrarToolbarBusquedaGrid(resumen, detalle);
+        actualizarFooterBusquedaGrid();
+    }
+
+    async function cargarMasResultadosBusquedaGrid() {
+        if (!estadoBusquedaGrid.activa || estadoBusquedaGrid.cargandoMas || !estadoBusquedaGrid.hayMas) {
+            return;
+        }
+
+        estadoBusquedaGrid.cargandoMas = true;
+        actualizarFooterBusquedaGrid();
+
+        const requestId = estadoBusqueda.requestId + 1;
+        cancelarBusquedaActiva();
+        estadoBusqueda.requestId = requestId;
+        estadoBusqueda.abortController = new AbortController();
+
+        try {
+            const signal = estadoBusqueda.abortController.signal;
+            const data = await buscarTodosLosBoletosEnServidor(
+                estadoBusquedaGrid.params,
+                requestId,
+                signal,
+                estadoBusquedaGrid.ultimoOffset
+            );
+
+            asegurarBusquedaVigente(requestId);
+            estadoBusquedaGrid.ultimoOffset = data.siguienteOffset || estadoBusquedaGrid.ultimoOffset;
+            estadoBusquedaGrid.hayMas = data.hayMas === true;
+            estadoBusquedaGrid.totalMostrados += Array.isArray(data.items) ? data.items.length : 0;
+
+            await renderizarResultadosBusqueda(data.items || [], {
+                ...estadoBusquedaGrid.meta,
+                totalMostrados: estadoBusquedaGrid.totalMostrados,
+                requestId
+            }, {
+                append: true
+            });
+
+            asegurarBusquedaVigente(requestId);
+
+            if (data.truncado) {
+                mostrarFeedbackBusqueda(`Se agregaron ${Array.isArray(data.items) ? data.items.length.toLocaleString() : '0'} resultados más. Puedes seguir cargando más si lo necesitas.`, 'info');
+            } else {
+                limpiarFeedbackBusqueda();
+            }
+        } catch (error) {
+            if (!esBusquedaCancelada(error)) {
+                console.warn('⚠️ Error cargando más resultados de búsqueda:', error.message);
+                mostrarFeedbackBusqueda('No se pudieron cargar más resultados en este momento.', 'warning');
+            }
+        } finally {
+            if (requestId === estadoBusqueda.requestId) {
+                estadoBusqueda.abortController = null;
+            }
+            estadoBusquedaGrid.cargandoMas = false;
+            actualizarFooterBusquedaGrid();
+        }
+    }
+
+    function obtenerModoBusquedaActual() {
+        const modoSeleccionado = String(selectModo?.value || 'exacto').trim().toLowerCase();
+        const modosValidos = new Set(['exacto', 'empieza', 'termina', 'contiene', 'rango']);
+        return modosValidos.has(modoSeleccionado) ? modoSeleccionado : 'exacto';
+    }
+
+    function aplicarModoBusquedaEnUI() {
+        const modoAvanzado = busquedaAvanzadaHabilitada();
+        const modo = obtenerModoBusquedaActual();
+        const meta = modoMeta[modo] || modoMeta.exacto;
+        const esRango = modo === 'rango';
+
+        if (toolbarAvanzada) {
+            toolbarAvanzada.hidden = !modoAvanzado;
+        }
+
+        if (labelPrincipal) {
+            labelPrincipal.textContent = modoAvanzado ? meta.label : modoMeta.exacto.label;
+        }
+
+        if (helperText) {
+            helperText.textContent = modoAvanzado ? meta.help : modoMeta.exacto.help;
+        }
+
+        inputBusqueda.placeholder = meta.placeholder;
+        if (inputBusquedaFin) {
+            inputBusquedaFin.hidden = !esRango;
+            inputBusquedaFin.value = esRango ? inputBusquedaFin.value : '';
+        }
+
+        if (wrapperPrincipal) {
+            wrapperPrincipal.classList.toggle('busqueda-wrapper--rango', esRango);
+        }
+
+        if (!modoAvanzado && selectModo) {
+            selectModo.value = 'exacto';
+        }
+
+        limpiarFeedbackBusqueda();
+        limpiarResultadosBusqueda();
+        restaurarVistaPrincipalBoletos();
+        restaurarGridPrincipalSiHaceFalta();
+    }
+
+    async function buscarBoletosEnServidor(params, opciones = {}) {
+        const endpoint = obtenerApiBaseCompra();
+        const searchParams = new URLSearchParams();
+        Object.entries(params).forEach(([clave, valor]) => {
+            if (valor !== undefined && valor !== null && valor !== '') {
+                searchParams.set(clave, String(valor));
+            }
+        });
+        const url = `${endpoint}/api/public/boletos/busqueda?${searchParams.toString()}`;
+        const maxIntentos = opciones.maxIntentos && Number.isInteger(opciones.maxIntentos)
+            ? Math.max(1, opciones.maxIntentos)
+            : 2;
+        let ultimoError = null;
+
+        for (let intento = 1; intento <= maxIntentos; intento += 1) {
+            if (opciones.signal?.aborted) {
+                throw crearErrorBusquedaCancelada();
+            }
+
+            try {
+                const respuesta = await fetch(url, {
+                    method: 'GET',
+                    signal: opciones.signal,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const json = await respuesta.json().catch(() => ({}));
+                if (!respuesta.ok || !json?.success) {
+                    const error = new Error(json?.message || `No se pudo realizar la búsqueda (${respuesta.status})`);
+                    error.status = respuesta.status;
+                    throw error;
+                }
+
+                return json.data || {};
+            } catch (error) {
+                if (esBusquedaCancelada(error)) {
+                    throw error;
+                }
+
+                ultimoError = error;
+                const status = Number(error?.status || 0);
+                const esErrorTransitorio = status === 429 || status >= 500 || status === 0;
+                const puedeReintentar = intento < maxIntentos && esErrorTransitorio;
+
+                if (!puedeReintentar) {
+                    throw error;
+                }
+
+                await esperar(250 * intento);
+            }
+        }
+
+        throw ultimoError || new Error('No se pudo completar la búsqueda.');
+    }
+
+    async function buscarExactoConFallbackLocal(numero, availableOnly) {
+        const selectedNumbers = obtenerBoletosSelecionados();
+        let estaVendido = false;
+        let estaApartado = false;
+
+        if (numeroEnRangoActual(numero) && rifaplusEstadoRangoActual.cargado) {
+            const { soldSet, reservedSet } = obtenerEstadoLocalBoletos();
+            estaVendido = soldSet.has(numero);
+            estaApartado = reservedSet.has(numero);
+        } else {
+            const estadoServidor = await verificarEstadoBoletoEnServidor(numero);
+            estaVendido = estadoServidor.vendido;
+            estaApartado = estadoServidor.apartado;
+        }
+
+        let estado = 'disponible';
+        if (estaVendido) estado = 'vendido';
+        if (estaApartado) estado = 'apartado';
+
+        const items = availableOnly && estado !== 'disponible'
+            ? []
+            : [{ numero, estado, seleccionado: selectedNumbers.includes(numero) }];
+
+        return {
+            items,
+            truncado: false
+        };
+    }
+
+    function construirMensajeSinResultados(modo, availableOnly) {
+        if (modo === 'exacto') {
+            return availableOnly
+                ? 'Ese boleto existe, pero ahora mismo no está disponible.'
+                : 'No encontramos ese boleto dentro del universo activo.';
+        }
+
+        if (modo === 'rango') {
+            return availableOnly
+                ? 'No encontramos boletos disponibles dentro de ese rango.'
+                : 'No encontramos boletos en ese rango.';
+        }
+
+        return availableOnly
+            ? 'No hubo coincidencias disponibles con ese filtro.'
+            : 'No encontramos coincidencias con esa búsqueda.';
+    }
+
+    function obtenerEstadoVisualResultado(item, selectedNumbers) {
+        const numero = Number(item?.numero);
+        const estadoServidor = item?.estado || 'disponible';
+        const yaSeleccionado = selectedNumbers.includes(numero);
+
+        if (estadoServidor === 'vendido') {
+            return {
+                numero,
+                statusText: '❌ Vendido',
+                statusClass: 'vendido',
+                actionButton: ''
+            };
+        }
+
+        if (estadoServidor === 'apartado') {
+            return {
+                numero,
+                statusText: '⏳ Apartado',
+                statusClass: 'apartado',
+                actionButton: ''
+            };
+        }
+
+        if (yaSeleccionado) {
+            return {
+                numero,
+                statusText: '✔️ Ya seleccionado',
+                statusClass: 'seleccionado',
+                actionButton: ''
+            };
+        }
+
+        return {
+            numero,
+            statusText: '✅ Disponible',
+            statusClass: 'disponible',
+            actionButton: `<button class="btn btn-lo-quiero" data-numero="${numero}">Lo quiero</button>`
+        };
+    }
+
+    function renderizarResultadosBusqueda(items, metaBusqueda = {}, opciones = {}) {
+        if (metaBusqueda.modo && metaBusqueda.modo !== 'exacto') {
+            return renderizarResultadosBusquedaEnGrid(items, metaBusqueda, metaBusqueda.requestId, opciones);
+        }
+
+        const resultadosList = asegurarMarkupResultadosLista();
+        if (!resultadosDiv || !resultadosList) return;
+
+        restaurarVistaPrincipalBoletos();
+        limpiarToolbarBusquedaGrid();
+        resultadosDiv.classList.remove('busqueda-resultados--grid');
+
+        const selectedNumbers = obtenerBoletosSelecionados();
+        resultadosList.innerHTML = '';
+
+        if (!Array.isArray(items) || items.length === 0) {
+            resultadosList.innerHTML = `<div class="resultados-vacio">${construirMensajeSinResultados(metaBusqueda.modo, metaBusqueda.availableOnly)}</div>`;
+            resultadosDiv.style.display = 'block';
+            return;
+        }
+
+        items.forEach((item) => {
+            const { numero, statusText, statusClass, actionButton } = obtenerEstadoVisualResultado(item, selectedNumbers);
+            const resultadoHtml = `
+                <div class="resultado-item resultado-item--${statusClass}">
+                    <div class="resultado-copy">
+                        <span class="resultado-numero">Boleto #${numero}</span>
+                        <span class="resultado-estado">Estado: <strong class="resultado-badge resultado-badge--${statusClass}">${statusText}</strong></span>
+                    </div>
+                    ${actionButton}
+                </div>
+            `;
+            resultadosList.insertAdjacentHTML('beforeend', resultadoHtml);
+        });
+
+        resultadosList.querySelectorAll('.btn-lo-quiero').forEach((btnLoQuiero) => {
+            btnLoQuiero.addEventListener('click', async function() {
+                const numero = parseInt(this.getAttribute('data-numero'), 10);
+                const seAgrego = await agregarBoletoDirectoCarrito(numero);
+                if (seAgrego) {
+                    animarAgregarAlCarrito(this, numero, true);
+                }
+            });
+        });
+
+        resultadosDiv.style.display = 'block';
+    }
+
     actualizarRangoBusquedaEnUI();
+    aplicarModoBusquedaEnUI();
 
     // Ejecutar búsqueda al hacer click en botón
     btnBuscar.addEventListener('click', ejecutarBusqueda);
 
     // Ejecutar búsqueda al presionar Enter
-    inputBusqueda.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            ejecutarBusqueda();
-        }
+    [inputBusqueda, inputBusquedaFin].forEach((input) => {
+        if (!input) return;
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                ejecutarBusqueda();
+            }
+        });
+        input.addEventListener('input', function() {
+            const valorNormalizado = normalizarValorNumericoEntrada(this.value);
+            if (this.value !== valorNormalizado) {
+                this.value = valorNormalizado;
+            }
+        });
     });
 
     inputBusqueda.addEventListener('input', function() {
         const valor = this.value.trim();
         const rango = obtenerRangoBusquedaActual();
+        const modo = obtenerModoBusquedaActual();
 
         if (!valor) {
             limpiarFeedbackBusqueda();
@@ -2124,112 +2748,169 @@ function configurarBuscadorBoletos() {
         }
 
         const numero = parseInt(valor, 10);
-        if (!Number.isNaN(numero) && (numero < rango.inicio || numero > rango.fin)) {
+        if (modo === 'exacto' && !Number.isNaN(numero) && (numero < rango.inicio || numero > rango.fin)) {
             mostrarFeedbackBusqueda(`Ese boleto no se puede buscar. El rango disponible actualmente va de ${rango.inicio.toLocaleString()} a ${rango.fin.toLocaleString()}.`, 'warning');
         } else {
             limpiarFeedbackBusqueda();
         }
     });
 
+    if (selectModo) {
+        selectModo.addEventListener('change', aplicarModoBusquedaEnUI);
+    }
+
     async function ejecutarBusqueda() {
         const rango = obtenerRangoBusquedaActual();
-        const valor = inputBusqueda.value.trim();
-        
+        const modo = obtenerModoBusquedaActual();
+        const valor = normalizarValorNumericoEntrada(inputBusqueda.value.trim());
+        const valorFin = normalizarValorNumericoEntrada(inputBusquedaFin?.value?.trim() || '');
+        const soloDisponibles = checkboxFiltroDisponibles?.checked === true;
+        const requestId = estadoBusqueda.requestId + 1;
+
         if (!valor) {
-            mostrarFeedbackBusqueda('Escribe un numero de boleto dentro del rango disponible para poder buscarlo.', 'info');
-            rifaplusUtils.showFeedback('⚠️ Ingresa un número para buscar', 'warning');
+            mostrarFeedbackBusqueda('Ingresa un valor para realizar la búsqueda.', 'info');
+            rifaplusUtils.showFeedback('⚠️ Escribe un número o rango para buscar', 'warning');
+            limpiarResultadosBusqueda();
+            restaurarVistaPrincipalBoletos();
+            restaurarGridPrincipalSiHaceFalta();
             return;
         }
 
-        const numero = parseInt(valor, 10);
+        const params = {
+            modo,
+            limite: LIMITE_RESULTADOS_BUSQUEDA,
+            availableOnly: soloDisponibles
+        };
 
-        if (isNaN(numero) || numero < rango.inicio || numero > rango.fin) {
-            mostrarFeedbackBusqueda(`Ese boleto esta fuera del rango disponible. Puedes buscar del ${rango.inicio.toLocaleString()} al ${rango.fin.toLocaleString()}.`, 'warning');
-            rifaplusUtils.showFeedback(`⚠️ Ingresa un número válido entre ${rango.inicio.toLocaleString()} y ${rango.fin.toLocaleString()}`, 'warning');
-            resultadosDiv.style.display = 'none';
-            return;
+        if (modo === 'rango') {
+            const inicio = parseInt(valor, 10);
+            const fin = parseInt(valorFin, 10);
+
+            if (!valorFin) {
+                mostrarFeedbackBusqueda('Completa el número final del rango para poder buscar.', 'info');
+                limpiarResultadosBusqueda();
+                restaurarVistaPrincipalBoletos();
+                restaurarGridPrincipalSiHaceFalta();
+                return;
+            }
+
+            if (!Number.isInteger(inicio) || !Number.isInteger(fin) || inicio < rango.inicio || fin > rango.fin || inicio > fin) {
+                mostrarFeedbackBusqueda(`Ingresa un rango válido entre ${rango.inicio.toLocaleString()} y ${rango.fin.toLocaleString()}.`, 'warning');
+                rifaplusUtils.showFeedback('⚠️ Revisa el rango de búsqueda', 'warning');
+                limpiarResultadosBusqueda();
+                restaurarVistaPrincipalBoletos();
+                restaurarGridPrincipalSiHaceFalta();
+                return;
+            }
+
+            params.inicio = inicio;
+            params.fin = fin;
+        } else {
+            params.q = valor;
+
+            if (modo === 'exacto') {
+                const numero = parseInt(valor, 10);
+                if (!Number.isInteger(numero) || numero < rango.inicio || numero > rango.fin) {
+                    mostrarFeedbackBusqueda(`Ese boleto está fuera del rango disponible. Puedes buscar del ${rango.inicio.toLocaleString()} al ${rango.fin.toLocaleString()}.`, 'warning');
+                    rifaplusUtils.showFeedback(`⚠️ Ingresa un número válido entre ${rango.inicio.toLocaleString()} y ${rango.fin.toLocaleString()}`, 'warning');
+                    limpiarResultadosBusqueda();
+                    restaurarVistaPrincipalBoletos();
+                    restaurarGridPrincipalSiHaceFalta();
+                    return;
+                }
+            }
         }
 
         limpiarFeedbackBusqueda();
-
-        const selectedNumbers = obtenerBoletosSelecionados();
-        let estaVendido = false;
-        let estaApartado = false;
+        cancelarBusquedaActiva();
+        estadoBusqueda.requestId = requestId;
+        estadoBusqueda.abortController = new AbortController();
+        establecerEstadoBuscando(true);
 
         try {
-            if (numeroEnRangoActual(numero) && rifaplusEstadoRangoActual.cargado) {
-                const { soldSet, reservedSet } = obtenerEstadoLocalBoletos();
-                estaVendido = soldSet.has(numero);
-                estaApartado = reservedSet.has(numero);
+            const signal = estadoBusqueda.abortController.signal;
+            const data = modo === 'exacto'
+                ? await buscarBoletosEnServidor(params, { signal })
+                : await buscarTodosLosBoletosEnServidor(params, requestId, signal);
+            asegurarBusquedaVigente(requestId);
+            if (modo !== 'exacto') {
+                estadoBusquedaGrid.activa = true;
+                estadoBusquedaGrid.params = { ...params };
+                estadoBusquedaGrid.meta = {
+                    modo,
+                    availableOnly: soloDisponibles,
+                    textoBusqueda: modo === 'rango' ? `${params.inicio} - ${params.fin}` : valor,
+                    labelModo: modoMeta[modo]?.label || modo
+                };
+                estadoBusquedaGrid.ultimoOffset = data.siguienteOffset || (Array.isArray(data.items) ? data.items.length : 0);
+                estadoBusquedaGrid.hayMas = data.hayMas === true;
+                estadoBusquedaGrid.totalMostrados = Array.isArray(data.items) ? data.items.length : 0;
             } else {
-                const estadoServidor = await verificarEstadoBoletoEnServidor(numero);
-                estaVendido = estadoServidor.vendido;
-                estaApartado = estadoServidor.apartado;
+                resetearEstadoBusquedaGrid();
+            }
+            await renderizarResultadosBusqueda(data.items || [], {
+                modo,
+                availableOnly: soloDisponibles,
+                textoBusqueda: modo === 'rango' ? `${params.inicio} - ${params.fin}` : valor,
+                labelModo: modoMeta[modo]?.label || modo,
+                totalMostrados: Array.isArray(data.items) ? data.items.length : 0,
+                requestId
+            });
+            asegurarBusquedaVigente(requestId);
+
+            if (modo !== 'exacto') {
+                if (data.truncado) {
+                    mostrarFeedbackBusqueda(`Mostrando los primeros ${data.items.length.toLocaleString()} resultados. Ajusta el filtro para afinar la búsqueda.`, 'info');
+                } else {
+                    limpiarFeedbackBusqueda();
+                }
+            } else if (Array.isArray(data.items) && data.items.length > 0) {
+                if (data.truncado) {
+                    mostrarFeedbackBusqueda(`Mostrando los primeros ${LIMITE_RESULTADOS_BUSQUEDA} resultados. Ajusta el filtro si quieres afinar más.`, 'info');
+                } else {
+                    limpiarFeedbackBusqueda();
+                }
+            } else {
+                mostrarFeedbackBusqueda(construirMensajeSinResultados(modo, soloDisponibles), 'info');
             }
         } catch (error) {
-            console.warn('⚠️ Error verificando boleto en búsqueda:', error.message);
-            rifaplusUtils.showFeedback('⚠️ No se pudo verificar el estado del boleto. Intenta de nuevo.', 'warning');
-            return;
-        }
-
-        const estaSeleccionado = selectedNumbers.includes(numero);
-
-        // Mostrar resultado
-        mostrarResultadoBusqueda(numero, estaVendido, estaApartado, estaSeleccionado);
-    }
-
-    function mostrarResultadoBusqueda(numero, vendido, apartado, yaSeleccionado) {
-        resultadosList.innerHTML = '';
-
-        let statusText = '✅ Disponible';
-        let statusClass = 'disponible';
-        let actionButton = '';
-
-        if (vendido) {
-            statusText = '❌ Vendido';
-            statusClass = 'vendido';
-        } else if (apartado) {
-            statusText = '⏳ Apartado';
-            statusClass = 'apartado';
-        } else if (yaSeleccionado) {
-            statusText = '✔️ Ya seleccionado';
-            statusClass = 'seleccionado';
-        } else {
-            // Solo mostrar botón si está disponible
-            actionButton = `<button class="btn btn-lo-quiero" data-numero="${numero}">Lo quiero</button>`;
-        }
-
-        const resultadoHtml = `
-            <div class="resultado-item resultado-item--${statusClass}">
-                <div class="resultado-copy">
-                    <span class="resultado-numero">Boleto #${numero}</span>
-                    <span class="resultado-estado">Estado: <strong class="resultado-badge resultado-badge--${statusClass}">${statusText}</strong></span>
-                </div>
-                ${actionButton}
-            </div>
-        `;
-
-        resultadosList.insertAdjacentHTML('beforeend', resultadoHtml);
-
-        // Añadir event listener al botón "Lo quiero"
-        const btnLoQuiero = resultadosList.querySelector(`[data-numero="${numero}"]`);
-        if (btnLoQuiero && !vendido && !apartado && !yaSeleccionado) {
-            btnLoQuiero.addEventListener('click', async function() {
-                const seAgregó = await agregarBoletoDirectoCarrito(numero);
-                
-                // Si se agregó exitosamente, animar el botón y carrito
-                if (seAgregó) {
-                    animarAgregarAlCarrito(btnLoQuiero, numero, true);
+            if (modo === 'exacto' && /ruta no encontrada|404/i.test(String(error.message || ''))) {
+                try {
+                    const numero = parseInt(valor, 10);
+                    const dataFallback = await buscarExactoConFallbackLocal(numero, soloDisponibles);
+                    renderizarResultadosBusqueda(dataFallback.items || [], {
+                        modo,
+                        availableOnly: soloDisponibles
+                    });
+                    mostrarFeedbackBusqueda('La búsqueda exacta siguió funcionando con compatibilidad temporal. Reinicia el backend para habilitar la búsqueda avanzada completa.', 'info');
+                    return;
+                } catch (fallbackError) {
+                    console.warn('⚠️ Fallback de búsqueda exacta también falló:', fallbackError.message);
                 }
-            });
-        }
+            }
 
-        resultadosDiv.style.display = 'block';
+            if (esBusquedaCancelada(error)) {
+                return;
+            }
+
+            console.warn('⚠️ Error en búsqueda de boletos:', error.message);
+            mostrarFeedbackBusqueda(error.message || 'No se pudo completar la búsqueda.', 'warning');
+            rifaplusUtils.showFeedback('⚠️ No se pudo realizar la búsqueda en este momento.', 'warning');
+            limpiarResultadosBusqueda();
+            restaurarVistaPrincipalBoletos();
+            restaurarGridPrincipalSiHaceFalta();
+        } finally {
+            if (requestId === estadoBusqueda.requestId) {
+                estadoBusqueda.abortController = null;
+                establecerEstadoBuscando(false);
+            }
+        }
     }
 
     if (!configurarBuscadorBoletos._listenerRegistrado && window.rifaplusConfig?.escucharEvento) {
         window.rifaplusConfig.escucharEvento('configuracionActualizada', () => {
             actualizarRangoBusquedaEnUI();
+            aplicarModoBusquedaEnUI();
         });
         configurarBuscadorBoletos._listenerRegistrado = true;
     }
@@ -2313,6 +2994,13 @@ async function agregarBoletoDirectoCarrito(numero) {
             btnLoQuiero.style.display = 'none';
         }
     }
+
+    document.querySelectorAll(`.busqueda-grid-btn[data-numero="${numero}"]`).forEach((btnResultado) => {
+        btnResultado.classList.remove('sold', 'reserved');
+        btnResultado.classList.add('selected');
+        btnResultado.disabled = false;
+        btnResultado.title = 'Ya seleccionado';
+    });
     
     // Marcar el boleto como seleccionado en el grid de la boletera
     // Búsqueda robusta: intenta múltiples formas de encontrar el botón

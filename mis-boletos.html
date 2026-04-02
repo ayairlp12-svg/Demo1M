@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://127.0.0.1:* http://localhost:* https://sadev-rifapiloto-production.up.railway.app; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://fonts.googleapis.com http://localhost:5001 http://127.0.0.1:5001 https://sadev-rifapiloto-production.up.railway.app; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' http://127.0.0.1:* http://localhost:* https: http://localhost:5001 http://127.0.0.1:5001 https://sadev-rifapiloto-production.up.railway.app ws: wss: ws://localhost:5001 wss://localhost:5001 ws://127.0.0.1:5001 wss://127.0.0.1:5001 wss://sadev-rifapiloto-production.up.railway.app ws://sadev-rifapiloto-production.up.railway.app; img-src 'self' data: https:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://127.0.0.1:* http://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://fonts.googleapis.com http://localhost:5001 http://127.0.0.1:5001; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' http://127.0.0.1:* http://localhost:* https: http://localhost:5001 http://127.0.0.1:5001 ws: wss: ws://localhost:5001 wss://localhost:5001 ws://127.0.0.1:5001 wss://127.0.0.1:5001; img-src 'self' data: https:;">
     <!-- METADATOS DINÁMICOS - Inyectados por js/meta-inyector.js desde config.js -->
     <title>Mis Boletos - Sorteos Torres RAM 1200 2025</title>
     <link rel="stylesheet" href="css/styles.css?v=20251228.15">
@@ -26,10 +26,8 @@
     <script src="js/config.js"></script>
     <script src="js/config-sync.js"></script>
     <script src="js/meta-inyector.js"></script>
-    <!-- ⚙️ Detectar entorno (debe ser PRIMERO, antes de socket-handler.js) -->
+    <!-- ⚙️ Detectar entorno -->
     <script src="js/environment-config.js"></script>
-    <!-- 🔌 Socket.io para actualizaciones en tiempo real (carga dinámicamente desde el backend) -->
-    <script src="js/socket-handler.js"></script>
     <script src="js/theme-loader.js?v=20251216"></script>
     <script>
         (function limpiarCacheYFechas() {
@@ -572,16 +570,16 @@
     </div>
 
     <!-- SCRIPTS -->
-    <script src="js/main.js"></script>
-    <script src="js/trigger-busqueda-auto.js"></script>
-    <script src="js/calculo-precios.js?v=20251230.1"></script>
+    <script defer src="js/main.js"></script>
+    <script defer src="js/trigger-busqueda-auto.js"></script>
+    <script defer src="js/calculo-precios.js?v=20251230.1"></script>
 
-    <script src="js/carrito-global.js?v=20260218"></script>
+    <script defer src="js/carrito-global.js?v=20260218"></script>
     <script defer src="js/carrito-oportunidades.js"></script>
-    <script src="js/flujo-compra.js?v=20260329.3"></script>
-    <script src="js/orden-formal.js"></script>
-    <script src="js/modal-contacto.js?v=20260329.2"></script>
-    <script src="js/btn-flotante-animator.js"></script>
+    <script defer src="js/flujo-compra.js?v=20260329.3"></script>
+    <script defer src="js/orden-formal.js"></script>
+    <script defer src="js/modal-contacto.js?v=20260329.2"></script>
+    <script defer src="js/btn-flotante-animator.js"></script>
 
     <style>
         /* Estilos específicos para mis-boletos.html */
@@ -1536,7 +1534,7 @@
         .orden-ticket-grid,
         .orden-oportunidades-lista {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(84px, max-content));
+            grid-template-columns: repeat(auto-fit, minmax(96px, max-content));
             gap: 0.48rem;
             width: 100%;
             justify-content: start;
@@ -1606,7 +1604,8 @@
 
         /* Estilos para items de boletos y oportunidades */
         .ticket-item {
-            /* Estilos principales en css/styles.css */
+            min-width: 96px;
+            max-width: 124px;
         }
 
         .ticket-numero {
@@ -1614,6 +1613,14 @@
             align-items: center;
             justify-content: center;
             line-height: 1;
+            color: #111111;
+        }
+
+        .ticket-numero-grande {
+            white-space: nowrap;
+            word-break: normal;
+            overflow-wrap: normal;
+            letter-spacing: 0.01em;
         }
 
         .ticket-numero i {
@@ -1753,7 +1760,7 @@
 
             .orden-card--ticket .orden-ticket-grid,
             .orden-card--ticket .orden-oportunidades-lista {
-                grid-template-columns: repeat(auto-fit, minmax(74px, max-content));
+                grid-template-columns: repeat(auto-fit, minmax(92px, max-content));
                 gap: 0.38rem;
             }
 
@@ -1761,6 +1768,8 @@
                 min-height: 36px;
                 font-size: 0.66rem;
                 padding: 0.22rem 0.64rem;
+                min-width: 92px;
+                max-width: 118px;
             }
 
             .orden-acciones-wrap {
@@ -2394,7 +2403,7 @@
 
             .orden-card--ticket .orden-ticket-grid,
             .orden-card--ticket .orden-oportunidades-lista {
-                grid-template-columns: repeat(auto-fit, minmax(72px, max-content));
+                grid-template-columns: repeat(auto-fit, minmax(88px, max-content));
                 gap: 0.35rem;
             }
 
@@ -2403,6 +2412,8 @@
                 font-size: 0.63rem;
                 letter-spacing: 0.03em;
                 padding: 0.2rem 0.56rem;
+                min-width: 88px;
+                max-width: 112px;
             }
 
             /* COMPACTAR ACCIONES */

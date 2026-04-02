@@ -252,19 +252,15 @@ async function abrirModalSeleccionCuenta() {
     // ✅ CARGAR CUENTAS DESDE EL SERVIDOR (backend tiene los datos actualizados)
     let cuentas = [];
     try {
-        const response = await fetch(`${window.rifaplusConfig.backend.apiBase}/api/public/config`,{
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (response.ok) {
-            const result = await response.json();
-            if (result.data?.cuentas && Array.isArray(result.data.cuentas) && result.data.cuentas.length > 0) {
-                cuentas = result.data.cuentas;
-                console.log('[AbrirModal] ✅ Cuentas cargadas desde servidor:', cuentas.length);
-                // Actualizar también en config.js para otros usos
-                window.rifaplusConfig.tecnica.bankAccounts = cuentas;
-            }
+        const configPublica = typeof window.rifaplusConfig?.obtenerConfigPublicaCompartida === 'function'
+            ? await window.rifaplusConfig.obtenerConfigPublicaCompartida()
+            : null;
+
+        if (configPublica?.cuentas && Array.isArray(configPublica.cuentas) && configPublica.cuentas.length > 0) {
+            cuentas = configPublica.cuentas;
+            console.log('[AbrirModal] ✅ Cuentas cargadas desde configuración compartida:', cuentas.length);
+            // Actualizar también en config.js para otros usos
+            window.rifaplusConfig.tecnica.bankAccounts = cuentas;
         }
     } catch (err) {
         console.debug('[AbrirModal] No se cargaron cuentas del servidor:', err.message);

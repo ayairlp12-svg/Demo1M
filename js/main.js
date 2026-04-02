@@ -22,6 +22,15 @@ window.rifaplusOportunidadesStartTime = null;    // Timestamp de inicio de carga
  */
 (async function cargarBoletosEnIndexHtml() {
     try {
+        const necesitaResumenPublico = !!document.querySelector('.progress-stats')
+            || !!document.getElementById('boletos-vendidos')
+            || !!document.getElementById('progress-fill');
+
+        if (!necesitaResumenPublico) {
+            console.debug('[main] Resumen público omitido: la página no tiene barra de progreso');
+            return;
+        }
+
         const apiBase = (window.rifaplusConfig && window.rifaplusConfig.backend && window.rifaplusConfig.backend.apiBase) 
             ? window.rifaplusConfig.backend.apiBase 
             : 'http://localhost:3000';
