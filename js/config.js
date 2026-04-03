@@ -37,7 +37,7 @@
  * ============================================================
  */
 
-let rifaplusLogoInicial = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 96'%3E%3Crect width='240' height='96' rx='20' fill='%230b2235'/%3E%3Ctext x='120' y='58' font-size='34' text-anchor='middle' fill='%23ffffff' font-family='Arial,sans-serif'%3ESaDev%3C/text%3E%3C/svg%3E";
+let rifaplusLogoInicial = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 96'%3E%3Crect width='240' height='96' rx='20' fill='%230b2235'/%3E%3Ctext x='120' y='58' font-size='28' text-anchor='middle' fill='%23ffffff' font-family='Arial,sans-serif'%3ERifaPlus%3C/text%3E%3C/svg%3E";
 
 try {
     const logoCacheado = localStorage.getItem('rifaplus_cached_logo') || '';
@@ -211,7 +211,7 @@ Object.assign(window.rifaplusConfig, {
         colorTextoSecundario: "#6B7280",
         colorFondo: "#FFFFFF",
         colorFondoSecundario: "#F5F5F5",
-        anioActual: 2026,
+        anioActual: new Date().getFullYear(),
         
         /**
          * Getter dinámico: usa primero el prefijo configurado explícitamente.
@@ -318,8 +318,8 @@ Object.assign(window.rifaplusConfig, {
     
     sorteoActivo: {
         estado: 'activo',           // 'activo' | 'proximo' | 'finalizado'
-        id: 'sorteo_001',
-        nombre: 'RAM 1200 2025 - Edición 20',  // ← Desde config.json
+        id: 'sorteo_actual',
+        nombre: '',
         
         /**
          * Getter dinámico: Lee fechaCierre desde rifa.fechaSorteo
@@ -385,15 +385,9 @@ Object.assign(window.rifaplusConfig, {
     /* 📡 bankAccounts se carga desde /backend/config.json         */
     
     tecnica: {
-        numeroWhatsappOrganizador: '+52 4591153960',  // ← Desde config.json
-        nombreOrganizador: 'SORTEOS TORRES',  // ← Desde config.json
-        bankAccounts: [
-            {id: 1, nombreBanco: "SANTANDER", accountNumber: "4456 1267 8989 1156", beneficiary: "Jose Luis Yepez Garcia", accountType: "Tarjeta", paymentType: "transferencia"},
-            {id: 2, nombreBanco: "BBVA", accountNumber: "4589 1290 4589 3210", beneficiary: "Jose Ayair Lopez Perez", accountType: "Tarjeta", paymentType: "transferencia"},
-            {id: 3, nombreBanco: "OXXO", accountNumber: "4489 4567 0121 89561", beneficiary: "Sortel Torres", accountType: "Tarjeta", paymentType: "efectivo", numero_referencia: "ST-0001"},
-            {id: 4, nombreBanco: "Farmacias del Ahorro", accountNumber: "4489 4567 0121 89561", beneficiary: "Sortel Torres", accountType: "Tarjeta", paymentType: "efectivo", numero_referencia: "FDA-0001"},
-            {id: 5, nombreBanco: "7-Eleven", accountNumber: "4489 4567 0121 89561", beneficiary: "Sortel Torres", accountType: "Tarjeta", paymentType: "efectivo", numero_referencia: "SEVEN-0001"}
-        ]  // ← Desde config.json
+        numeroWhatsappOrganizador: '',
+        nombreOrganizador: '',
+        bankAccounts: []
     },
 
     /* ============================================================ */
@@ -438,7 +432,7 @@ Object.assign(window.rifaplusConfig, {
         descripcion: "",
         keywords: "",
         palabrasLlave: "",
-        urlBase: "http://127.0.0.1:5500/",
+        urlBase: "",
         openGraph: {
             titulo: "",
             descripcion: "",
@@ -756,70 +750,6 @@ window.rifaplusConfig.importarConfiguracion = function(jsonString) {
 // ====================================
 // FUNCIONES PARA GESTIÓN DE FECHA
 // ====================================
-
-/**
- * Obtiene fecha ISO del sorteo
- */
-window.rifaplusConfig.obtenerFechaSorteo = function() {
-    if (!this.rifa) return null;
-    return this.rifa.fechaSorteo || null;
-};
-
-/**
- * Obtiene timestamp en ms del sorteo
- */
-window.rifaplusConfig.obtenerTimestampSorteo = function() {
-    const fechaISO = this.obtenerFechaSorteo();
-    if (!fechaISO) return null;
-    
-    try {
-        const timestamp = new Date(fechaISO).getTime();
-        if (isNaN(timestamp)) {
-            console.error('❌ No se pudo parsear:', fechaISO);
-            return null;
-        }
-        return timestamp;
-    } catch (error) {
-        console.error('❌ Error calculando timestamp:', error);
-        return null;
-    }
-};
-
-/**
- * Valida la fecha del sorteo
- */
-window.rifaplusConfig.validarFechaSorteo = function() {
-    const fechaISO = this.obtenerFechaSorteo();
-    
-    if (!fechaISO) {
-        return {
-            valida: false,
-            mensaje: '⏳ Sincronizando fecha desde servidor...',
-            timestamp: null,
-            pendiente: true
-        };
-    }
-    
-    const timestamp = this.obtenerTimestampSorteo();
-    if (!timestamp) {
-        return {
-            valida: false,
-            mensaje: `No se pudo parsear fechaSorteo: "${fechaISO}"`,
-            timestamp: null
-        };
-    }
-    
-    const ahora = new Date().getTime();
-    const sorteoYaPaso = timestamp <= ahora;
-    
-    return {
-        valida: true,
-        mensaje: sorteoYaPaso ? 'El sorteo ya ha ocurrido' : 'Fecha válida',
-        timestamp: timestamp,
-        sorteoYaPaso: sorteoYaPaso,
-        diasRestantes: Math.floor((timestamp - ahora) / (1000 * 60 * 60 * 24))
-    };
-};
 
 /**
  * Obtiene fecha ISO del sorteo
