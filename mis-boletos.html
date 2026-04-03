@@ -575,6 +575,7 @@
     <script defer src="js/main.js"></script>
     <script defer src="js/trigger-busqueda-auto.js"></script>
     <script defer src="js/calculo-precios.js?v=20251230.1"></script>
+    <script defer src="js/vendor/jspdf.umd.min.js"></script>
 
     <script defer src="js/carrito-global.js?v=20260218"></script>
     <script defer src="js/carrito-oportunidades.js"></script>
@@ -1510,6 +1511,64 @@
 
         .orden-card.orden-card--ticket .orden-info-item-total .orden-info-value {
             font-size: 1.08rem;
+        }
+
+        .orden-confirmada-panel {
+            text-align: center;
+            padding: 1rem;
+            background: linear-gradient(135deg, rgba(95, 123, 105, 0.14) 0%, rgba(95, 123, 105, 0.08) 100%);
+            border-radius: var(--radius-md);
+            color: var(--success-dark);
+            border: 1px solid rgba(95, 123, 105, 0.15);
+        }
+
+        .orden-confirmada-panel h4 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.2rem;
+        }
+
+        .orden-confirmada-panel p {
+            margin: 0;
+            font-size: 0.95rem;
+        }
+
+        .orden-acciones-descarga {
+            margin-top: 0.9rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .btn-descargar-orden {
+            min-width: min(100%, 320px);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.65rem;
+            padding: 0.95rem 1.25rem;
+            border-radius: 999px;
+            border: 1px solid rgba(15, 58, 125, 0.14);
+            background: rgba(255, 255, 255, 0.92);
+            color: var(--primary);
+            box-shadow: 0 12px 28px rgba(15, 58, 125, 0.10);
+            font-weight: 700;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+
+        .btn-descargar-orden:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 16px 32px rgba(15, 58, 125, 0.14);
+            border-color: rgba(15, 58, 125, 0.2);
+        }
+
+        .btn-descargar-orden:active {
+            transform: translateY(0);
+        }
+
+        .btn-descargar-orden:disabled {
+            opacity: 0.7;
+            cursor: wait;
+            transform: none;
+            box-shadow: 0 10px 22px rgba(15, 58, 125, 0.08);
         }
 
         .orden-boletos,
@@ -2457,7 +2516,8 @@
             currentWhatsapp: null,
             ordenes: [],
             ordenActualComprobante: null,
-            isLoading: false
+            isLoading: false,
+            ordenesDescargando: new Set()
         };
         window.appState = appState;
 
@@ -2736,6 +2796,310 @@
             }
             return { valido: true };
         }
+
+        function obtenerDigitosBoletosOrden() {
+            const totalBoletosConfig = Number(window.rifaplusConfig?.rifa?.totalBoletos);
+            if (Number.isFinite(totalBoletosConfig) && totalBoletosConfig > 0) {
+                return Math.max(1, String(totalBoletosConfig - 1).length);
+            }
+            return 4;
+        }
+
+        function formatearNumeroBoletoOrden(numero) {
+            const limpio = String(numero ?? '').replace(/[^0-9]/g, '');
+            if (!limpio) return '-';
+
+            const boletoNumero = parseInt(limpio, 10);
+            if (!Number.isFinite(boletoNumero) || boletoNumero < 0) {
+                return '-';
+            }
+
+            return String(boletoNumero).padStart(obtenerDigitosBoletosOrden(), '0');
+        }
+
+        function obtenerOrdenPorId(ordenId) {
+            return Array.isArray(appState.ordenes)
+                ? appState.ordenes.find((orden) => String(orden.id || orden.numero_orden || '') === String(ordenId || ''))
+                : null;
+        }
+
+        function obtenerNombreCompletoOrden(orden) {
+            return [
+                orden?.nombre_cliente || orden?.nombre || '',
+                orden?.apellido_cliente || orden?.apellidos || ''
+            ].filter(Boolean).join(' ').trim() || 'Cliente';
+        }
+
+        function obtenerFechaOrdenPdf(orden) {
+            const fecha = new Date(orden?.createdAt || orden?.fecha_creacion || orden?.updatedAt || Date.now());
+            return Number.isNaN(fecha.getTime()) ? new Date() : fecha;
+        }
+
+        function construirLineasBoletosPdf(boletosFormateados) {
+            if (!boletosFormateados.length) return ['-'];
+
+            return boletosFormateados.reduce((lineas, boleto) => {
+                const actual = lineas[lineas.length - 1] || '';
+                const candidata = actual ? `${actual}, ${boleto}` : boleto;
+
+                if (candidata.length > 74) {
+                    lineas.push(boleto);
+                } else {
+                    lineas[lineas.length - 1] = candidata;
+                }
+
+                return lineas;
+            }, ['']).filter(Boolean);
+        }
+
+        function dibujarBloqueInfoPdf(pdf, { x, y, width, title, rows }) {
+            pdf.setFillColor(248, 250, 252);
+            pdf.setDrawColor(226, 232, 240);
+            const anchoValor = Math.max(40, width - 40);
+            const lineasPorFila = rows.map((row) => {
+                const textoValor = String(row.value || '-');
+                const lineas = pdf.splitTextToSize(textoValor, anchoValor);
+                return Array.isArray(lineas) && lineas.length ? lineas : ['-'];
+            });
+            const alturaFilas = lineasPorFila.reduce((total, lineas) => total + Math.max(1, lineas.length) * 4.8, 0);
+            const altura = 16 + alturaFilas + 4;
+            pdf.roundedRect(x, y, width, altura, 4, 4, 'FD');
+
+            pdf.setTextColor(15, 23, 42);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(11);
+            pdf.text(title, x + 5, y + 8);
+
+            pdf.setFontSize(9.5);
+            pdf.setTextColor(51, 65, 85);
+
+            rows.forEach((row, index) => {
+                const lineasValor = lineasPorFila[index];
+                const alturaAcumulada = lineasPorFila
+                    .slice(0, index)
+                    .reduce((total, lineas) => total + Math.max(1, lineas.length) * 4.8, 0);
+                const filaY = y + 14 + alturaAcumulada;
+                pdf.setFont('helvetica', 'bold');
+                pdf.text(`${row.label}:`, x + 5, filaY);
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(lineasValor, x + 35, filaY);
+            });
+
+            return y + altura;
+        }
+
+        async function descargarOrdenConfirmada(ordenId) {
+            const orden = obtenerOrdenPorId(ordenId);
+
+            if (!orden) {
+                rifaplusUtils.showFeedback('❌ No pudimos localizar esa orden para descargarla.', 'error');
+                return;
+            }
+
+            if (validarEstadoOrden(orden.estado) !== 'confirmada') {
+                rifaplusUtils.showFeedback('⚠️ La descarga solo está disponible para órdenes confirmadas.', 'warning');
+                return;
+            }
+
+            if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function') {
+                rifaplusUtils.showFeedback('❌ El generador de PDF no está disponible en este momento.', 'error');
+                return;
+            }
+
+            if (appState.ordenesDescargando.has(ordenId)) {
+                return;
+            }
+
+            const selectorSeguro = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+                ? CSS.escape(String(ordenId))
+                : String(ordenId).replace(/"/g, '\\"');
+            const boton = document.querySelector(`[data-descargar-orden="${selectorSeguro}"]`);
+            const htmlOriginal = boton ? boton.innerHTML : '';
+
+            try {
+                appState.ordenesDescargando.add(ordenId);
+                if (boton) {
+                    boton.disabled = true;
+                    boton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando PDF...';
+                }
+
+                rifaplusUtils.showFeedback('⏳ Preparando tu orden en PDF...', 'info');
+
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+
+                const colorPrimario = [15, 58, 125];
+                const colorTexto = [30, 41, 59];
+                const colorSuave = [100, 116, 139];
+                const margen = 16;
+                const anchoPagina = pdf.internal.pageSize.getWidth();
+                const altoPagina = pdf.internal.pageSize.getHeight();
+                const anchoContenido = anchoPagina - (margen * 2);
+                const anchoTextoBoletos = anchoContenido - 4;
+
+                const boletosFormateados = Array.isArray(orden.boletos)
+                    ? orden.boletos
+                        .map(formatearNumeroBoletoOrden)
+                        .filter((boleto) => boleto !== '-')
+                        .sort()
+                    : [];
+
+                const subtotal = Number(orden.subtotal ?? 0);
+                const descuento = Number(orden.descuento ?? 0);
+                const total = Number(orden.total ?? Math.max(0, subtotal - descuento));
+                const fechaOrden = obtenerFechaOrdenPdf(orden);
+                const fechaOrdenLarga = fechaOrden.toLocaleString('es-MX', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                const fechaSorteo = window.rifaplusConfig?.obtenerFechaSorteoFormato?.()
+                    || window.rifaplusConfig?.rifa?.fechaSorteoFormato
+                    || 'Por confirmar';
+                const nombreCliente = obtenerNombreCompletoOrden(orden);
+                const nombreSorteo = orden.nombre_sorteo
+                    || orden.sorteo_nombre
+                    || window.rifaplusConfig?.rifa?.nombreSorteo
+                    || 'Sorteo';
+                const nombreOrganizador = window.rifaplusConfig?.cliente?.nombre || 'Organizador';
+                const whatsapp = orden.whatsapp || orden.telefono_cliente || appState.currentWhatsapp || '-';
+
+                function dibujarEncabezadoBoletos(actualY) {
+                    pdf.setFillColor(255, 255, 255);
+                    pdf.setDrawColor(226, 232, 240);
+                    pdf.roundedRect(margen, actualY, anchoContenido, 14, 4, 4, 'FD');
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setFontSize(11);
+                    pdf.setTextColor(...colorTexto);
+                    pdf.text('Boletos comprados', margen + 5, actualY + 9);
+                    pdf.setFont('courier', 'normal');
+                    pdf.setFontSize(10);
+                    pdf.setTextColor(...colorTexto);
+                    return actualY + 18;
+                }
+
+                let y = margen;
+
+                pdf.setFillColor(...colorPrimario);
+                pdf.roundedRect(margen, y, anchoContenido, 26, 5, 5, 'F');
+                pdf.setTextColor(255, 255, 255);
+                pdf.setFont('helvetica', 'bold');
+                pdf.setFontSize(18);
+                pdf.text(nombreOrganizador, margen + 6, y + 10);
+                pdf.setFontSize(11);
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(`Orden confirmada · ${nombreSorteo}`, margen + 6, y + 17);
+                pdf.setFont('helvetica', 'bold');
+                pdf.text(`#${String(orden.id || orden.numero_orden || '-')}`, anchoPagina - margen - 6, y + 11, { align: 'right' });
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(fechaOrdenLarga, anchoPagina - margen - 6, y + 17, { align: 'right' });
+
+                y += 34;
+
+                const mitad = (anchoContenido - 4) / 2;
+                const baseY = y;
+                const yIzquierda = dibujarBloqueInfoPdf(pdf, {
+                    x: margen,
+                    y: baseY,
+                    width: mitad,
+                    title: 'Cliente',
+                    rows: [
+                        { label: 'Nombre', value: nombreCliente },
+                        { label: 'WhatsApp', value: whatsapp },
+                        { label: 'Sorteo', value: nombreSorteo },
+                        { label: 'Fecha sorteo', value: fechaSorteo }
+                    ]
+                });
+                const yDerecha = dibujarBloqueInfoPdf(pdf, {
+                    x: margen + mitad + 4,
+                    y: baseY,
+                    width: mitad,
+                    title: 'Resumen',
+                    rows: [
+                        { label: 'Cantidad', value: `${boletosFormateados.length} boletos` },
+                        { label: 'Subtotal', value: `$${subtotal.toFixed(2)}` },
+                        { label: 'Total', value: `$${total.toFixed(2)}` }
+                    ]
+                });
+                y = Math.max(yIzquierda, yDerecha) + 8;
+
+                const lineasBoletos = construirLineasBoletosPdf(boletosFormateados);
+                y = dibujarEncabezadoBoletos(y);
+
+                lineasBoletos.forEach((linea) => {
+                    const lineasRender = pdf.splitTextToSize(linea, anchoTextoBoletos);
+                    const altoLinea = Math.max(1, lineasRender.length) * 5.2;
+
+                    if (y + altoLinea > altoPagina - 24) {
+                        pdf.addPage();
+                        y = margen;
+                        y = dibujarEncabezadoBoletos(y);
+                    }
+
+                    pdf.text(lineasRender, margen + 2, y);
+                    y += altoLinea;
+                });
+
+                y += 4;
+                if (y > altoPagina - 42) {
+                    pdf.addPage();
+                    y = margen;
+                }
+
+                pdf.setDrawColor(226, 232, 240);
+                pdf.line(margen, y, anchoPagina - margen, y);
+                y += 8;
+
+                pdf.setFont('helvetica', 'bold');
+                pdf.setFontSize(12);
+                pdf.setTextColor(...colorTexto);
+                pdf.text('Totales de la orden', margen, y);
+                y += 8;
+
+                pdf.setFontSize(10.5);
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(`Subtotal: $${subtotal.toFixed(2)}`, margen, y);
+                y += 6.5;
+
+                if (descuento > 0) {
+                    pdf.text(`Descuento: -$${descuento.toFixed(2)}`, margen, y);
+                    y += 6.5;
+                }
+
+                pdf.setFont('helvetica', 'bold');
+                pdf.setTextColor(...colorPrimario);
+                pdf.text(`Total pagado: $${total.toFixed(2)}`, margen, y);
+
+                pdf.setFont('helvetica', 'normal');
+                pdf.setFontSize(8.5);
+                pdf.setTextColor(...colorSuave);
+                pdf.text(
+                    'Este documento resume tu orden confirmada. Conserva este PDF como respaldo de tus boletos.',
+                    margen,
+                    altoPagina - 10
+                );
+
+                const nombreArchivo = `orden-${String(orden.id || orden.numero_orden || 'confirmada').replace(/[^a-zA-Z0-9-_]/g, '-')}.pdf`;
+                pdf.save(nombreArchivo);
+                rifaplusUtils.showFeedback('✅ Tu orden se descargó correctamente.', 'success');
+            } catch (error) {
+                console.error('Error al descargar orden confirmada:', error);
+                rifaplusUtils.showFeedback('❌ No pudimos generar el PDF de tu orden.', 'error');
+            } finally {
+                appState.ordenesDescargando.delete(ordenId);
+                if (boton) {
+                    boton.disabled = false;
+                    boton.innerHTML = htmlOriginal;
+                }
+            }
+        }
+        window.descargarOrdenConfirmada = descargarOrdenConfirmada;
 
         // ============================================
         // BÚSQUEDA DE ÓRDENES
@@ -3252,9 +3616,18 @@
                     `;
                 } else if (estadoValidado === 'confirmada') {
                     botonesAccion = `
-                        <div style="text-align: center; padding: 1rem; background: linear-gradient(135deg, rgba(95, 123, 105, 0.14) 0%, rgba(95, 123, 105, 0.08) 100%); border-radius: var(--radius-md); color: var(--success-dark);">
-                            <h4 style="margin: 0 0 0.5rem 0; font-size: 1.2rem;">🎉 ¡Ya Estás Participando!</h4>
-                            <p style="margin: 0; font-size: 0.95rem;">Mucha suerte en el sorteo. Revisa nuestras redes sociales para los resultados.</p>
+                        <div class="orden-confirmada-panel">
+                            <h4>🎉 ¡Ya Estás Participando!</h4>
+                            <p>Mucha suerte en el sorteo. Revisa nuestras redes sociales para los resultados.</p>
+                        </div>
+                        <div class="orden-acciones-descarga">
+                            <button
+                                type="button"
+                                class="btn-descargar-orden"
+                                data-descargar-orden="${ordenId}"
+                                onclick="descargarOrdenConfirmada('${ordenId.replace(/'/g, '')}')">
+                                <i class="fas fa-download"></i> Descargar orden
+                            </button>
                         </div>
                     `;
                 } else if (estadoValidado === 'cancelada') {
