@@ -149,8 +149,8 @@
     <section class="compra-hero compra-hero--purple">
         <div class="container">
             <div class="compra-hero-inner">
-                <h1 class="compra-hero-title" id="compraHeroTitle">¿Listo para ser el proximo ganador de SaDev? Elige tus boletos y participa ahora</h1>
-                <p class="compra-hero-sub">Selecciona los boletos que quieras o deja que la máquina de la suerte elija por ti. ¡Mucha Suerte!</p>
+                <h1 class="compra-hero-title" id="compraHeroTitle">Elige tus boletos y participa ahora</h1>
+                <p class="compra-hero-sub" id="compraHeroSub">Selecciona los boletos que quieras o deja que la máquina de la suerte elija por ti. ¡Mucha Suerte!</p>
                 <div class="compra-hero-cta">
                     <a href="#numerosGrid" class="btn btn-seleccionar">
                         <span class="cta-icon" aria-hidden="true"><i class="fas fa-ticket-alt"></i></span>
@@ -253,6 +253,52 @@
             </div>
 
             <script>
+            function obtenerNombreSorteoInicialCompra() {
+                const nombreConfig = String(window.rifaplusConfig?.rifa?.nombreSorteo || '').trim();
+                if (nombreConfig) return nombreConfig;
+
+                const metaOgTitle = document.querySelector('meta[property="og:title"]')?.content || '';
+                const fuentes = [document.title, metaOgTitle].map((valor) => String(valor || '').trim()).filter(Boolean);
+
+                for (const fuente of fuentes) {
+                    const matchCompra = fuente.match(/^Compra tus boletos para\s+(.+?)(?:\s+\|\s+.+)?$/i);
+                    if (matchCompra?.[1]) {
+                        return matchCompra[1].trim();
+                    }
+
+                    const matchPipe = fuente.match(/^(.+?)\s+\|\s+.+$/);
+                    if (matchPipe?.[1] && !/^Compra tus boletos$/i.test(matchPipe[1].trim())) {
+                        return matchPipe[1].trim();
+                    }
+                }
+
+                return '';
+            }
+
+            function actualizarHeroCompraDesdeConfig() {
+                const compraHeroTitle = document.getElementById('compraHeroTitle');
+                const compraHeroSub = document.getElementById('compraHeroSub');
+                if (!compraHeroTitle) return;
+
+                const nombreSorteo = obtenerNombreSorteoInicialCompra();
+                const descripcionSorteo = String(window.rifaplusConfig?.rifa?.descripcion || '').trim();
+                const metaDescription = String(document.querySelector('meta[name="description"]')?.content || '').trim();
+
+                if (nombreSorteo) {
+                    compraHeroTitle.textContent = `Elige tus boletos para ${nombreSorteo} y participa ahora`;
+                } else {
+                    compraHeroTitle.textContent = 'Elige tus boletos y participa ahora';
+                }
+
+                if (compraHeroSub) {
+                    compraHeroSub.textContent = descripcionSorteo || metaDescription || 'Selecciona los boletos que quieras o deja que la máquina de la suerte elija por ti. ¡Mucha Suerte!';
+                }
+            }
+
+            actualizarHeroCompraDesdeConfig();
+            window.addEventListener('configSyncCompleto', actualizarHeroCompraDesdeConfig);
+            window.addEventListener('configuracionActualizada', actualizarHeroCompraDesdeConfig);
+
             // Cargar precio y promociones dinámicamente - DIRECTAMENTE DEL SERVIDOR SIN COOLDOWN
             async function cargarPrecioYPromos() {
                 console.log('[PROMO] Iniciando cargarPrecioYPromos');
@@ -266,11 +312,7 @@
                 }
                 console.log('[PROMO] Config verificada tras', intentos * 100, 'ms');
 
-                const organizadorNombre = String(window.rifaplusConfig?.cliente?.nombre || 'SORTEO').trim() || 'SORTEO';
-                const compraHeroTitle = document.getElementById('compraHeroTitle');
-                if (compraHeroTitle) {
-                    compraHeroTitle.textContent = `¿Listo para ser el proximo ganador de ${organizadorNombre}? Elige tus boletos y participa ahora`;
-                }
+                actualizarHeroCompraDesdeConfig();
                 
                 // 🔄 PASO 1: OBTENER PRECIO DIRECTAMENTE DEL SERVIDOR (sin cooldown)
                 // Esto asegura que siempre obtenemos el valor actual de config.json
