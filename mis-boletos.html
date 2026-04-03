@@ -1538,37 +1538,84 @@
             justify-content: center;
         }
 
+        @keyframes btnDescargarOrdenPulse {
+            0%, 100% {
+                transform: translateY(0) scale(1);
+                box-shadow: 0 16px 34px rgba(15, 58, 125, 0.20);
+            }
+            50% {
+                transform: translateY(-1px) scale(1.02);
+                box-shadow: 0 22px 42px rgba(15, 58, 125, 0.28);
+            }
+        }
+
+        @keyframes btnDescargarOrdenGlow {
+            0%, 100% {
+                opacity: 0.28;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.5;
+                transform: scale(1.04);
+            }
+        }
+
         .btn-descargar-orden {
+            position: relative;
+            overflow: hidden;
             min-width: min(100%, 320px);
             display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 0.65rem;
-            padding: 0.95rem 1.25rem;
+            padding: 1rem 1.35rem;
             border-radius: 999px;
-            border: 1px solid rgba(15, 58, 125, 0.14);
-            background: rgba(255, 255, 255, 0.92);
-            color: var(--primary);
-            box-shadow: 0 12px 28px rgba(15, 58, 125, 0.10);
-            font-weight: 700;
-            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: #ffffff;
+            box-shadow: 0 16px 34px rgba(15, 58, 125, 0.20);
+            font-weight: 800;
+            letter-spacing: 0.01em;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+            animation: btnDescargarOrdenPulse 2.8s ease-in-out infinite;
+        }
+
+        .btn-descargar-orden::before {
+            content: '';
+            position: absolute;
+            inset: -20%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 62%);
+            pointer-events: none;
+            animation: btnDescargarOrdenGlow 2.8s ease-in-out infinite;
+        }
+
+        .btn-descargar-orden > * {
+            position: relative;
+            z-index: 1;
         }
 
         .btn-descargar-orden:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 16px 32px rgba(15, 58, 125, 0.14);
-            border-color: rgba(15, 58, 125, 0.2);
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 24px 46px rgba(15, 58, 125, 0.30);
+            filter: saturate(1.06);
+            animation-play-state: paused;
         }
 
         .btn-descargar-orden:active {
-            transform: translateY(0);
+            transform: translateY(0) scale(0.995);
         }
 
         .btn-descargar-orden:disabled {
             opacity: 0.7;
             cursor: wait;
             transform: none;
-            box-shadow: 0 10px 22px rgba(15, 58, 125, 0.08);
+            animation: none;
+            box-shadow: 0 10px 22px rgba(15, 58, 125, 0.12);
+        }
+
+        .btn-descargar-orden:disabled::before {
+            animation: none;
+            opacity: 0.18;
         }
 
         .orden-boletos,
@@ -3109,6 +3156,21 @@
         const MAX_SEARCH_RETRIES = 2; // Máximo 2 reintentos
         const CACHE_KEY_PREFIX = 'rifaplus_ordenes_cache_';
         const CACHE_TTL = 5 * 60 * 1000; // 5 minutos de TTL
+
+        function construirFirmaOrdenes(ordenes) {
+            if (!Array.isArray(ordenes)) return '[]';
+
+            return JSON.stringify(
+                ordenes.map((orden) => ({
+                    id: String(orden?.id || orden?.numero_orden || ''),
+                    estado: validarEstadoOrden(orden?.estado),
+                    comprobante: Boolean(orden?.comprobante_path),
+                    updatedAt: orden?.updatedAt || orden?.updated_at || orden?.createdAt || '',
+                    total: Number(orden?.total ?? 0),
+                    boletos: Array.isArray(orden?.boletos) ? orden.boletos.length : 0
+                }))
+            );
+        }
         
         // Función auxiliar: Limpiar cache antiguo (mantener máximo 50 entradas)
         function cleanupOldCache() {
@@ -3197,50 +3259,44 @@
                 return;
             }
 
-            // **NUEVO**: Verificar cache primero
+            // Guardar en sessionStorage desde el inicio para mantener consistencia
+            sessionStorage.setItem(SESSION_KEY_WHATSAPP, whatsapp);
+            appState.currentWhatsapp = whatsapp;
+
+            let renderDesdeCache = false;
+            let firmaCache = '[]';
+
+            // Mostrar cache inmediatamente, pero SIEMPRE refrescar desde el servidor.
             const cachedOrdenes = getFromCache(whatsapp);
             if (cachedOrdenes !== null) {
-                // Cache hit: mostrar órdenes sin hacer request
                 console.log('📦 Usando órdenes del cache (TTL: 5 min)');
                 appState.ordenes = cachedOrdenes;
-                appState.currentWhatsapp = whatsapp;
+                renderDesdeCache = true;
+                firmaCache = construirFirmaOrdenes(cachedOrdenes);
                 renderizarOrdenes(cachedOrdenes);
                 mostrarListaOrdenes();
                 
-                // ✅ Actualizar imágenes dinámicas después de renderizar
                 setTimeout(() => {
                     actualizarImagenesDinamicas();
                 }, 50);
-                
-                // Hacer scroll a los resultados
-                setTimeout(() => {
-                    const listaOrdenes = document.getElementById('listaOrdenes');
-                    if (listaOrdenes) {
-                        const rect = listaOrdenes.getBoundingClientRect();
-                        const absoluteTop = rect.top + window.pageYOffset;
-                        window.scrollTo({ top: absoluteTop - 120, behavior: 'smooth' });
-                    }
-                }, 300);
-                
-                return; // Salir aquí, no hacer request
             }
 
             // Establecer bandera de búsqueda en progreso
             isSearching = true;
             searchRetryCount = 0;
-            
-            // Guardar en sessionStorage
-            sessionStorage.setItem(SESSION_KEY_WHATSAPP, whatsapp);
-            appState.currentWhatsapp = whatsapp;
 
             // Cambiar estado del botón a cargando
             btnBuscar.disabled = true;
             const btnOriginalHTML = btnBuscar.innerHTML;
-            btnBuscar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
+            btnBuscar.innerHTML = renderDesdeCache
+                ? '<i class="fas fa-sync-alt fa-spin"></i> Actualizando...'
+                : '<i class="fas fa-spinner fa-spin"></i> Buscando...';
             btnBuscar.style.opacity = '0.8';
 
-            // Mostrar carga
-            mostrarCarga();
+            // Mostrar carga completa solo si no hay cache visible
+            if (!renderDesdeCache) {
+                mostrarCarga();
+            }
 
             // Función para realizar la búsqueda con reintentos
             function performSearch(retryCount = 0) {
@@ -3321,26 +3377,33 @@
                         if (data.length > 0) {
                             // **NUEVO**: Guardar en cache antes de mostrar
                             saveToCache(whatsapp, data);
+                            const firmaFresh = construirFirmaOrdenes(data);
                             
                             appState.ordenes = data;
-                            renderizarOrdenes(data);
-                            mostrarListaOrdenes();
+                            const debeRepintar = !renderDesdeCache || firmaFresh !== firmaCache;
+
+                            if (debeRepintar) {
+                                renderizarOrdenes(data);
+                                mostrarListaOrdenes();
+                            }
                             
-                            // Hacer scroll a los resultados con efecto suave
-                            setTimeout(() => {
-                                const listaOrdenes = document.getElementById('listaOrdenes');
-                                if (listaOrdenes) {
-                                    const rect = listaOrdenes.getBoundingClientRect();
-                                    const absoluteTop = rect.top + window.pageYOffset;
-                                    window.scrollTo({ top: absoluteTop - 120, behavior: 'smooth' });
-                                    
-                                    // Resaltar la primera orden brevemente
-                                    const primerCard = listaOrdenes.querySelector('.orden-card');
-                                    if (primerCard) {
-                                        primerCard.style.animation = 'highlightAnimation 2s ease-out';
+                            if (!renderDesdeCache) {
+                                // Hacer scroll a los resultados con efecto suave
+                                setTimeout(() => {
+                                    const listaOrdenes = document.getElementById('listaOrdenes');
+                                    if (listaOrdenes) {
+                                        const rect = listaOrdenes.getBoundingClientRect();
+                                        const absoluteTop = rect.top + window.pageYOffset;
+                                        window.scrollTo({ top: absoluteTop - 120, behavior: 'smooth' });
+                                        
+                                        // Resaltar la primera orden brevemente
+                                        const primerCard = listaOrdenes.querySelector('.orden-card');
+                                        if (primerCard) {
+                                            primerCard.style.animation = 'highlightAnimation 2s ease-out';
+                                        }
                                     }
-                                }
-                            }, 300);
+                                }, 300);
+                            }
                         } else {
                             mostrarSinOrdenes('No se encontraron órdenes con ese WhatsApp.');
                         }
@@ -3388,7 +3451,9 @@
                     })
                     .finally(() => {
                         if (retryCount === 0) { // Solo limpiar en la llamada inicial
-                            ocultarCarga();
+                            if (!renderDesdeCache) {
+                                ocultarCarga();
+                            }
                             // Restablecer botón
                             btnBuscar.disabled = false;
                             btnBuscar.innerHTML = btnOriginalHTML;
