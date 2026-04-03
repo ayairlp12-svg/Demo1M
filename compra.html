@@ -21,8 +21,46 @@
     <link rel="stylesheet" href="css/styles.css?v=20260401.3">
     <script>
         (function() {
-            const cachedLogo = localStorage.getItem('rifaplus_cached_logo') || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 96'%3E%3Crect width='240' height='96' rx='20' fill='%230b2235'/%3E%3Ctext x='120' y='58' font-size='34' text-anchor='middle' fill='%23ffffff' font-family='Arial,sans-serif'%3ESaDev%3C/text%3E%3C/svg%3E";
+            const fallbackLogo = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 96'%3E%3Crect width='240' height='96' rx='20' fill='%230b2235'/%3E%3Ctext x='120' y='58' font-size='28' text-anchor='middle' fill='%23ffffff' font-family='Arial,sans-serif'%3ERifaPlus%3C/text%3E%3C/svg%3E";
+            const cachedLogo = localStorage.getItem('rifaplus_cached_logo') || fallbackLogo;
             window.__RIFAPLUS_CACHED_LOGO__ = cachedLogo;
+            window.__RIFAPLUS_COMPRA_HERO__ = (function() {
+                const subtitulo = 'Selecciona los boletos que quieras o deja que la máquina de la suerte elija por ti. ¡Mucha Suerte!';
+                let organizador = '';
+
+                if (!organizador) {
+                    try {
+                        organizador = String(localStorage.getItem('rifaplus_compra_hero_organizador') || '').trim();
+                    } catch (error) {
+                        organizador = '';
+                    }
+                }
+
+                if (!organizador) {
+                    try {
+                        organizador = String(window.rifaplusConfig?.cliente?.nombre || '').trim();
+                    } catch (error) {
+                        organizador = '';
+                    }
+                }
+
+                if (!organizador) {
+                    try {
+                        const configLocal = JSON.parse(localStorage.getItem('rifaplus_config_actual_v2') || '{}');
+                        organizador = String(configLocal?.cliente?.nombre || '').trim();
+                    } catch (error) {
+                        organizador = '';
+                    }
+                }
+
+                return {
+                    organizador,
+                    titulo: organizador
+                        ? `¿Listo para ser el proximo ganador de ${organizador}? Elige tus boletos y participa ahora`
+                        : 'Elige tus boletos y participa ahora',
+                    subtitulo
+                };
+            })();
             document.write('<link rel="preload" as="image" href="' + cachedLogo + '" fetchpriority="high">');
             document.write('<link rel="icon" href="' + cachedLogo + '" sizes="32x32">');
             document.write('<link rel="apple-touch-icon" href="' + cachedLogo + '">');
@@ -110,9 +148,9 @@
             <a href="index.html#top" class="logo" data-logo-src id="logoLink">
                 <div class="logo-circle">
                     <script>
-                        document.write('<img src="' + (window.__RIFAPLUS_CACHED_LOGO__ || "data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 240 96\\'%3E%3Crect width=\\'240\\' height=\\'96\\' rx=\\'20\\' fill=\\'%230b2235\\'/%3E%3Ctext x=\\'120\\' y=\\'58\\' font-size=\\'34\\' text-anchor=\\'middle\\' fill=\\'%23ffffff\\' font-family=\\'Arial,sans-serif\\'%3ESaDev%3C/text%3E%3C/svg%3E") + '" alt="SORTEOS YEPE" class="logo-image dynamic-logo" data-dynamic-logo="true" width="320" height="137" decoding="async">');
+                        document.write('<img src="' + (window.__RIFAPLUS_CACHED_LOGO__ || "data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 240 96\\'%3E%3Crect width=\\'240\\' height=\\'96\\' rx=\\'20\\' fill=\\'%230b2235\\'/%3E%3Ctext x=\\'120\\' y=\\'58\\' font-size=\\'28\\' text-anchor=\\'middle\\' fill=\\'%23ffffff\\' font-family=\\'Arial,sans-serif\\'%3ERifaPlus%3C/text%3E%3C/svg%3E") + '" alt="Logo del organizador" class="logo-image dynamic-logo" data-dynamic-logo="true" width="320" height="137" decoding="async">');
                     </script>
-                    <noscript><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 96'%3E%3Crect width='240' height='96' rx='20' fill='%230b2235'/%3E%3Ctext x='120' y='58' font-size='34' text-anchor='middle' fill='%23ffffff' font-family='Arial,sans-serif'%3ESaDev%3C/text%3E%3C/svg%3E" alt="SORTEOS YEPE" class="logo-image dynamic-logo" data-dynamic-logo="true" width="320" height="137" decoding="async"></noscript>
+                    <noscript><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 96'%3E%3Crect width='240' height='96' rx='20' fill='%230b2235'/%3E%3Ctext x='120' y='58' font-size='28' text-anchor='middle' fill='%23ffffff' font-family='Arial,sans-serif'%3ERifaPlus%3C/text%3E%3C/svg%3E" alt="Logo del organizador" class="logo-image dynamic-logo" data-dynamic-logo="true" width="320" height="137" decoding="async"></noscript>
                 </div>
             </a>
 
@@ -149,8 +187,8 @@
     <section class="compra-hero compra-hero--purple">
         <div class="container">
             <div class="compra-hero-inner">
-                <h1 class="compra-hero-title" id="compraHeroTitle">Elige tus boletos y participa ahora</h1>
-                <p class="compra-hero-sub" id="compraHeroSub">Selecciona los boletos que quieras o deja que la máquina de la suerte elija por ti. ¡Mucha Suerte!</p>
+                <h1 class="compra-hero-title" id="compraHeroTitle"><script>document.write((window.__RIFAPLUS_COMPRA_HERO__ && window.__RIFAPLUS_COMPRA_HERO__.titulo) || 'Elige tus boletos y participa ahora');</script></h1>
+                <p class="compra-hero-sub" id="compraHeroSub"><script>document.write((window.__RIFAPLUS_COMPRA_HERO__ && window.__RIFAPLUS_COMPRA_HERO__.subtitulo) || 'Selecciona los boletos que quieras o deja que la máquina de la suerte elija por ti. ¡Mucha Suerte!');</script></p>
                 <div class="compra-hero-cta">
                     <a href="#numerosGrid" class="btn btn-seleccionar">
                         <span class="cta-icon" aria-hidden="true"><i class="fas fa-ticket-alt"></i></span>
@@ -254,6 +292,16 @@
 
             <script>
             function obtenerNombreOrganizadorInicialCompra() {
+                const nombrePrecalculado = String(window.__RIFAPLUS_COMPRA_HERO__?.organizador || '').trim();
+                if (nombrePrecalculado) return nombrePrecalculado;
+
+                try {
+                    const nombreCacheHero = String(localStorage.getItem('rifaplus_compra_hero_organizador') || '').trim();
+                    if (nombreCacheHero) return nombreCacheHero;
+                } catch (error) {
+                    console.warn('⚠️ No se pudo leer cache del hero de compra:', error?.message || error);
+                }
+
                 const nombreConfig = String(window.rifaplusConfig?.cliente?.nombre || '').trim();
                 if (nombreConfig) return nombreConfig;
 
@@ -275,10 +323,20 @@
 
                 const organizadorNombre = obtenerNombreOrganizadorInicialCompra();
 
+                compraHeroTitle.textContent = organizadorNombre
+                    ? `¿Listo para ser el proximo ganador de ${organizadorNombre}? Elige tus boletos y participa ahora`
+                    : 'Elige tus boletos y participa ahora';
+
                 if (organizadorNombre) {
-                    compraHeroTitle.textContent = `¿Listo para ser el proximo ganador de ${organizadorNombre}? Elige tus boletos y participa ahora`;
-                } else {
-                    compraHeroTitle.textContent = 'Elige tus boletos y participa ahora';
+                    try {
+                        localStorage.setItem('rifaplus_compra_hero_organizador', organizadorNombre);
+                        if (window.__RIFAPLUS_COMPRA_HERO__) {
+                            window.__RIFAPLUS_COMPRA_HERO__.organizador = organizadorNombre;
+                            window.__RIFAPLUS_COMPRA_HERO__.titulo = compraHeroTitle.textContent;
+                        }
+                    } catch (error) {
+                        console.warn('⚠️ No se pudo guardar cache del hero de compra:', error?.message || error);
+                    }
                 }
 
                 if (compraHeroSub) {
