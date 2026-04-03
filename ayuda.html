@@ -875,50 +875,73 @@
             // Cargar dinámicamente las redes sociales desde config.js
             function renderizarRedesContacto() {
                 const contactoRedes = document.querySelector('.contacto-redes');
-                
-                if (contactoRedes && window.config && window.config.cliente && window.config.cliente.redesSociales) {
-                    const redes = window.config.cliente.redesSociales;
-                    contactoRedes.innerHTML = '';
-                    
-                    // WhatsApp
-                    if (redes.whatsapp) {
-                        const whatsappPhone = redes.whatsapp.replace(/[^0-9]/g, '');
-                        const whatsappUrl = `https://wa.me/${whatsappPhone}`;
+
+                const configActual = window.rifaplusConfig;
+                const redes = configActual?.cliente?.redesSociales;
+
+                if (!contactoRedes || !redes) {
+                    setTimeout(renderizarRedesContacto, 500);
+                    return;
+                }
+
+                const normalizarUrlSocial = (valor, baseUrl) => {
+                    const limpio = String(valor || '').trim();
+                    if (!limpio) return '';
+                    if (/^https?:\/\//i.test(limpio)) return limpio;
+                    return `${baseUrl}${limpio.replace(/^@/, '')}`;
+                };
+
+                contactoRedes.innerHTML = '';
+
+                if (redes.whatsapp) {
+                    const whatsappPhone = String(redes.whatsapp).replace(/[^0-9]/g, '');
+                    if (whatsappPhone) {
                         const whatsappLink = document.createElement('a');
-                        whatsappLink.href = whatsappUrl;
+                        whatsappLink.href = `https://wa.me/${whatsappPhone}`;
                         whatsappLink.target = '_blank';
                         whatsappLink.rel = 'noopener noreferrer';
                         whatsappLink.className = 'social-icon-circle whatsapp-circle';
+                        whatsappLink.title = 'WhatsApp';
+                        whatsappLink.setAttribute('aria-label', 'WhatsApp');
                         whatsappLink.innerHTML = '<i class="fab fa-whatsapp"></i>';
                         contactoRedes.appendChild(whatsappLink);
                     }
-                    
-                    // Facebook
-                    if (redes.facebook) {
-                        const facebookUrl = redes.facebook.includes('facebook.com') ? redes.facebook : `https://facebook.com/${redes.facebook}`;
-                        const facebookLink = document.createElement('a');
-                        facebookLink.href = facebookUrl;
-                        facebookLink.target = '_blank';
-                        facebookLink.rel = 'noopener noreferrer';
-                        facebookLink.className = 'social-icon-circle facebook-circle';
-                        facebookLink.innerHTML = '<i class="fab fa-facebook-f"></i>';
-                        contactoRedes.appendChild(facebookLink);
-                    }
-                    
-                    // Instagram
-                    if (redes.instagram) {
-                        const instagramUrl = redes.instagram.includes('instagram.com') ? redes.instagram : `https://instagram.com/${redes.instagram}`;
-                        const instagramLink = document.createElement('a');
-                        instagramLink.href = instagramUrl;
-                        instagramLink.target = '_blank';
-                        instagramLink.rel = 'noopener noreferrer';
-                        instagramLink.className = 'social-icon-circle instagram-circle';
-                        instagramLink.innerHTML = '<i class="fab fa-instagram"></i>';
-                        contactoRedes.appendChild(instagramLink);
-                    }
-                    
-                } else {
-                    setTimeout(renderizarRedesContacto, 500);
+                }
+
+                if (redes.facebook) {
+                    const facebookLink = document.createElement('a');
+                    facebookLink.href = normalizarUrlSocial(redes.facebook, 'https://facebook.com/');
+                    facebookLink.target = '_blank';
+                    facebookLink.rel = 'noopener noreferrer';
+                    facebookLink.className = 'social-icon-circle facebook-circle';
+                    facebookLink.title = 'Facebook';
+                    facebookLink.setAttribute('aria-label', 'Facebook');
+                    facebookLink.innerHTML = '<i class="fab fa-facebook-f"></i>';
+                    contactoRedes.appendChild(facebookLink);
+                }
+
+                if (redes.instagram) {
+                    const instagramLink = document.createElement('a');
+                    instagramLink.href = normalizarUrlSocial(redes.instagram, 'https://instagram.com/');
+                    instagramLink.target = '_blank';
+                    instagramLink.rel = 'noopener noreferrer';
+                    instagramLink.className = 'social-icon-circle instagram-circle';
+                    instagramLink.title = 'Instagram';
+                    instagramLink.setAttribute('aria-label', 'Instagram');
+                    instagramLink.innerHTML = '<i class="fab fa-instagram"></i>';
+                    contactoRedes.appendChild(instagramLink);
+                }
+
+                if (redes.tiktok) {
+                    const tiktokLink = document.createElement('a');
+                    tiktokLink.href = normalizarUrlSocial(redes.tiktok, 'https://www.tiktok.com/@');
+                    tiktokLink.target = '_blank';
+                    tiktokLink.rel = 'noopener noreferrer';
+                    tiktokLink.className = 'social-icon-circle tiktok-circle';
+                    tiktokLink.title = 'TikTok';
+                    tiktokLink.setAttribute('aria-label', 'TikTok');
+                    tiktokLink.innerHTML = '<i class="fab fa-tiktok"></i>';
+                    contactoRedes.appendChild(tiktokLink);
                 }
             }
             
